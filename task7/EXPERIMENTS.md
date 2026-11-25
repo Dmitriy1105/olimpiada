@@ -221,3 +221,26 @@ The printed `invalid_landings=0` is only one terminal-status column; CELL 11B.2 
 Compare incumbent `weights_v3b.pt` with preliminary winner `weights_v3b_wind_p00192.pt` on a fresh balanced 240-episode batch (40 per family), medium, horizon 800, seed 94627. This seed is distinct from CELL 11A.4 (62814), CELL 11B.1R (73129), and CELL 11B.2 (93517). No tuning occurs in this stage.
 
 Script: `task7/cell11b3_full_validation.py`. Outputs flights, overall summary, family summary, paired results, stratified family-weighted bootstrap CI, total-reward paired bootstrap CI, and terminal status counts (LANDED, HULL_CONTACT, TIMEOUT, INVALID_LANDING, OUT_OF_BOUNDS, OTHER). Original v3b/v2c weights are not overwritten. Candidate is not promoted until aggregate evidence and family-level regressions are reviewed.
+
+
+## CELL 11B.3 — full paired validation results (seed 94627)
+
+Пользовательский запуск: 240 matched episodes per model, 40 per family, medium, horizon 800. QC PASS. v3b: total R=22588.308, landed=150/240 (62.50%), timeout=0, hull=15, invalid_landing=75, out_of_bounds=0, mean steps=243.788, mean absolute final pad offset=2.825. Candidate v3b_wind_p00192: total R=22966.116, landed=149/240 (62.083%), timeout=0, hull=8, invalid_landing=83, out_of_bounds=0, mean steps=248.446, mean absolute final pad offset=1.804.
+
+Paired candidate−v3b: total reward delta=+377.808 (+1.67%); 73 wins / 50 losses / 117 ties; mean paired delta=+1.5742. Stratified family-weighted 95% CI for mean delta=[-1.5398,4.3128]; paired total-reward 95% CI=[-369.873,1080.762]. Both include zero. Landing delta=-1; hull-contact delta=-7; invalid-landing delta=+8; timeout and out-of-bounds unchanged at zero. Therefore the aggregate improvement is not statistically established and the candidate is NOT promoted. v3b remains the experimental incumbent; retain candidate weights for analysis.
+
+Family deltas (candidate−v3b):
+- approach: reward +0.363; landings 30→30; hull 0→0; invalid 10→10.
+- crosswind: reward +374.175; landings 1→0; hull 9→3; invalid 30→37.
+- fast_descent: reward −0.566; landings 35→35; hull 0→0; invalid 5→5.
+- lateral: reward −1.278; landings 23→23; hull 3→3; invalid 14→14.
+- low_thrust: reward −195.622; landings 32→31; hull 2→1; invalid 6→8.
+- recovery: reward +200.734; landings 29→30; hull 1→1; invalid 10→9.
+
+Interpretation: the signed-wind candidate reduces crosswind hull contacts (9→3) and improves crosswind reward, but shifts more episodes into INVALID_LANDING (30→37) and loses the single baseline landing (1→0). It also regresses in low_thrust (reward −195.622, landing −1) while improving recovery (+200.734, landing +1). The overall mean final pad offset improves, but the supplied summary is not family-specific; do not attribute that aggregate offset reduction to crosswind without a dedicated breakdown. Next step is terminal-state and trajectory diagnosis, not another alpha sweep.
+
+## CELL 11B.4 — terminal-state and trajectory diagnostics prepared
+
+Script: `task7/cell11b4_terminal_diagnostics.py`. Compare `v3b` and `v3b_wind_p00192` on fresh development episodes: 40 crosswind + 40 low_thrust per model, medium, horizon 800, seed 271828. Records matched episode outcomes, terminal x/y/vx/vy/theta/omega and settle time, final and closest pad offsets, action distribution, and trajectory samples every 5 steps plus every step at height <=8. Writes flights, trajectory trace, action distribution, family summary, and terminal-status CSVs.
+
+Purpose: determine whether the candidate's reduced crosswind hull contacts become stable off-pad settlements, whether final position is actually inside the pad corridor, and whether velocity/attitude/rotation at settlement explain INVALID_LANDING; also quantify the low_thrust regression. This is a diagnostic development seed, not a final holdout. No tuning or promotion is performed; v3b remains incumbent and neither checkpoint is overwritten.
