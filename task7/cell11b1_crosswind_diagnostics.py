@@ -98,14 +98,17 @@ def _evaluate_with_trace(name, model_path, n_episodes, seed, horizon):
     assert final_settle.shape == (n_episodes,)
     assert terminated.shape == (n_episodes,)
 
-    # Reconstruct terminal reason from the participant-v2 public state flags
-    # and the exact termination conditions in torch_lander/env.py:
-    # settled but not landed -> INVALID_LANDING; boundary crossing -> OUT_OF_BOUNDS.
+    # Reconstruct terminal reason from the exact termination logic in
+    # participant-v2 torch_lander/env.py: terminated = crash | outside | settled.
+    # hull_contact identifies crash; settle_time identifies settled.
     settled = final_settle >= 0.5 - 1e-10
-    out_of_bounds = (np.abs(final_x) >= 40.0 - 1e-7) | (final_y >= 60.0 - 1e-7)
+    landed_mask = landed.astype(bool)
+    hull_mask = hull.astype(bool)
+    invalid_landing = terminated & settled & ~landed_mask & ~hull_mask
+    out_of_bounds = terminated & ~settled & ~hull_mask
     status = np.full(n_episodes, "OTHER", dtype=object)
-    status[terminated & settled & (landed == 0) & (hull == 0)] = "INVALID_LANDING"
-    status[terminated & out_of_bounds & (landed == 0) & (hull == 0)] = "OUT_OF_BOUNDS"
+    status[invalid_landing] = "INVALID_LANDING"
+    status[out_of_bounds] = "OUT_OF_BOUNDS"
     status[timeout == 1] = "TIMEOUT"
     status[hull == 1] = "HULL_CONTACT"
     status[landed == 1] = "LANDED"
