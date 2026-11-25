@@ -145,4 +145,47 @@ Crosswind action distribution практически совпадает: дей�
 
 ### CELL 11B.1R — correction after runtime API mismatch
 
-Первый повторный запуск остановился после завершения прогона v2c с `AttributeError: 'Lander' object has no attribute 'x'`. Причина — диагностический скрипт обращался к несуществующим `env.x` и `env.y`. Проверен исходный `torch_lander/env.py` из `last-metre-participant-v2.zip`: физическое состояние доступно через `env.state` (колонки `x`, nominal height, `vx`, `vy`, `theta`, `omega`); `env.settle_time` и `env.terminated` входят в публичный набор dynamic_fields. Скрипт исправлен и теперь использует эти реальные поля. Классификация следует точной логике исходного `env.py`: `terminated = crash | outside | settled`; `hull_contact` выделяет crash, `settle_time >= 0.5−1e−10` — settled. Поэтому `terminated & settled & ~landed & ~hull_contact` → INVALID_LANDING, а `terminated & ~settled & ~hull_contact` → OUT_OF_BOUNDS. TIMEOUT, HULL_CONTACT и LANDED берутся из соответствующих публичных флагов. Повторный запуск CELL 11B.1R ещё не выполнен; результаты не заявляются.
+Первый повторный запуск остановился после завершения прогона v2c с `AttributeError: 'Lander' object has no attribute 'x'`. Причина — диагностический скрипт обращался к несуществующим `env.x` и `env.y`. Проверен исходный `torch_lander/env.py` из `last-metre-participant-v2.zip`: физическое состояние доступно через `env.state` (колонки `x`, nominal height, `vx`, `vy`, `theta`, `omega`); `env.settle_time` и `env.terminated` входят в публичный набор dynamic_fields. Скрипт исправлен и теперь использует эти реальные поля. Классификация следует точной логике исходного `env.py`: `terminated = crash | outside | settled`; `hull_contact` выделяет crash, `settle_time >= 0.5−1e−10` — settled. Поэтому `terminated & settled & ~landed & ~hull_contact` → INVALID_LANDING, а `terminated & ~settled & ~hull_contact` → OUT_OF_BOUNDS. TIMEOUT, HULL_CONTACT и LANDED берутся из соответствующих публичных флагов. Повторный запуск CELL 11B.1R выполнен на том же development seed 73129: v2c R=19680.87, landed=137/240, hull=20; v3b R=21197.18, landed=145/240, hull=19. Исправленная классификация: crosswind v2c — 0 landed / 31 INVALID_LANDING / 9 HULL_CONTACT; v3b — 0 / 28 / 12. См. следующий раздел CELL 11B.1R.
+
+
+## CELL 11B.1R — corrected terminal status and pad-offset analysis
+
+Пользовательский повторный запуск после исправления API, тот же development seed 73129, 240 эпизодов (40 на семейство), horizon 800. QC PASS.
+
+| Model | R | Landed | Hull contacts | Timeouts |
+|---|---:|---:|---:|---:|
+| v2c | 19680.87 | 137/240 | 20 | 0 |
+| v3b | 21197.18 | 145/240 | 19 | 0 |
+
+По семействам: approach 30→30; crosswind 0→0; fast_descent 33→33; lateral 23→22; low_thrust 20→29; recovery 31→31. Изменение общего результата обеспечено главным образом low_thrust (+9 посадок). Crosswind остаётся нерешённым.
+
+**Корректная терминальная классификация crosswind (40 эпизодов на модель):**
+
+| Status | v2c | v3b |
+|---|---:|---:|
+| LANDED | 0 | 0 |
+| INVALID_LANDING | 31 | 28 |
+| HULL_CONTACT | 9 | 12 |
+| TIMEOUT | 0 | 0 |
+
+По исходному env.py INVALID_LANDING означает устойчивую двухопорную поддержку и выдерживание SETTLE_SECONDS, но условие on_pad не выполнено. Для on_pad проверяются геометрическое положение обеих опор в пределах площадки, высота стоп и угол корпуса. Следовательно, это не просто «неустойчивое касание».
+
+Из финального observation: relative_x = (x - pad_center)/20. Поэтому |final_relative_x|×20 даёт абсолютное смещение корпуса от центра площадки в координатах симулятора. Среднее смещение по crosswind failure rows:
+- v2c INVALID_LANDING: 10.220; HULL_CONTACT: 12.347.
+- v3b INVALID_LANDING: 10.568; HULL_CONTACT: 10.340.
+Медианное абсолютное смещение по всем 40 эпизодам: v2c 10.83, v3b 10.27. Только 1/40 эпизодов v2c и 2/40 v3b оказались в пределах максимальной ширины площадки 2.4. Это указывает на крупную ошибку горизонтального позиционирования; финальная классификация сама по себе не доказывает, что только она является причиной каждого invalid landing.
+
+Crosswind action shares:
+- v2c: actions 0..8 = 15.246, 31.561, 14.839, 0, 0, 0, 0.964, 36.336, 1.055%.
+- v3b: actions 0..8 = 14.277, 31.177, 16.259, 0, 0, 0, 1.192, 35.946, 1.148%.
+Action mapping: throttle=(action//3)*0.5; turn=action%3−1. Thus both policies use only 0% and 100% throttle in this family; actions 3–5 (50% throttle) are unused. Their overall crosswind action distributions are very similar.
+
+The final feature table is a diagnostic subset of all crosswind/recovery rows; the full per-episode diagnostics and trajectory/action CSVs remain in the user's REPORTS_DIR. Paired wins/losses/ties and confidence intervals were not present in the supplied console output and are not inferred here. Seed 73129 remains development-only, not a final holdout.
+
+## CELL 11B.2 — signed-wind horizontal-channel screening (prepared)
+
+Hypothesis: v3b's adaptive gate changes the vertical/thrust channel; the crosswind action distribution is nearly unchanged. Test a small signed-wind feed-forward term in the existing horizontal turn channel while preserving the v3b vertical gate and original weights.
+
+Script: task7/cell11b2_horizontal_wind_screen.py. It identifies the existing v3b vertical gate, selects a low-influence auxiliary first-layer neuron, and routes normalized signed wind observation feature 12 into the verified turn-channel neuron 1. Four signed amplitudes are screened: −0.0192, −0.0096, +0.0096, +0.0192; gate sharpness=2.0. Positive and negative directions are both tested rather than assumed.
+
+Protocol: compare baseline v3b and four candidates on the same 48 crosswind-only medium episodes, seed 93517, horizon 800. Save candidate weights separately and export episode, trajectory, action, paired-screen, and candidate-manifest CSVs. This is a small development screen only; no candidate is promoted from this result alone. Any promising candidate must next be checked on a fresh balanced 240-episode run across all six families, with paired and stratified-bootstrap analysis. Original v2c and v3b weights are not overwritten.
