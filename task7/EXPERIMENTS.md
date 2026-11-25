@@ -244,3 +244,43 @@ Interpretation: the signed-wind candidate reduces crosswind hull contacts (9→3
 Script: `task7/cell11b4_terminal_diagnostics.py`. Compare `v3b` and `v3b_wind_p00192` on fresh development episodes: 40 crosswind + 40 low_thrust per model, medium, horizon 800, seed 271828. Records matched episode outcomes, terminal x/y/vx/vy/theta/omega and settle time, final and closest pad offsets, action distribution, and trajectory samples every 5 steps plus every step at height <=8. Writes flights, trajectory trace, action distribution, family summary, and terminal-status CSVs.
 
 Purpose: determine whether the candidate's reduced crosswind hull contacts become stable off-pad settlements, whether final position is actually inside the pad corridor, and whether velocity/attitude/rotation at settlement explain INVALID_LANDING; also quantify the low_thrust regression. This is a diagnostic development seed, not a final holdout. No tuning or promotion is performed; v3b remains incumbent and neither checkpoint is overwritten.
+
+
+## CELL 11B.4 — terminal-state and trajectory diagnostics results (seed 271828)
+
+Пользовательский запуск на свежей диагностической выборке: 40 crosswind + 40 low_thrust episodes per model, medium, horizon 800. QC PASS. No weights were modified.
+
+| Family | Model | R | Landed | Hull | Invalid |
+|---|---|---:|---:|---:|---:|
+| crosswind | v3b | -2063.7975 | 0/40 | 10 | 30 |
+| crosswind | v3b_wind_p00192 | -1225.3925 | 1/40 | 8 | 31 |
+| low_thrust | v3b | 4655.7213 | 30/40 | 2 | 8 |
+| low_thrust | v3b_wind_p00192 | 4855.9683 | 31/40 | 2 | 7 |
+
+Crosswind terminal/near-pad diagnostics:
+- Mean absolute final pad offset: 12.0759 → 4.7856.
+- Median absolute final pad offset: 10.6789 → 4.1309.
+- Mean closest recorded absolute offset below height 8: 8.4011 → 3.1201.
+- Mean absolute final vx: 0.5814 → 0.2743.
+- Mean absolute final vy: 0.4841 → 0.3411.
+- Mean absolute final theta: 0.5052 → 0.5479 rad.
+- Mean absolute final omega: 0.3474 → 0.3418.
+
+Low-thrust diagnostics:
+- Mean absolute final pad offset: 0.7262 → 0.7153.
+- Landings: 30→31; invalid landings: 8→7; hull contacts unchanged at 2.
+- Mean absolute final vx/vy/theta/omega are very similar between models.
+
+Crosswind action distribution shows that the candidate selects neutral turn more often and left/right turn less often:
+- 0%-throttle neutral action: 32.614%→36.009%.
+- 100%-throttle neutral action: 35.258%→39.392%.
+- 0%-throttle left/right: 13.870%/15.805% → 10.694%/11.530%.
+- 50%-throttle actions remain unused for both models in both diagnostic families.
+
+Interpretation: on this fresh 40-episode crosswind diagnostic set, the wind candidate substantially improves horizontal position and horizontal velocity, reduces hull contacts by 2, and produces one landing instead of zero. However invalid landings remain 31/40, and mean absolute final attitude is slightly worse. Low-thrust shows no regression on this diagnostic seed (31 vs 30 landings), which does not reproduce the low-thrust regression seen in the broader CELL 11B.3 validation. This small diagnostic sample does not supersede CELL 11B.3 or establish promotion. The key unresolved question is which landing acceptance constraint (pad geometry, attitude, foot clearance, or residual motion) rejects the off-centre/tilted settled states.
+
+## CELL 11B.5 — paired failure decomposition prepared
+
+Script: `task7/cell11b5_failure_decomposition.py`. This is a post-processing step using the CSVs already written by CELL 11B.4; it does not rerun the simulator. It pairs identical (family, episode_id) cases and reports terminal-status transitions (e.g. HULL_CONTACT→INVALID_LANDING), reward deltas by transition, terminal-state metrics grouped by status, closest recorded near-surface approach (height <=8) with the action/velocity/attitude at that sample, and throttle distribution by family/model.
+
+Run only after CELL 11B.4 outputs are present in REPORTS_DIR. The script writes five CSV reports and does not alter checkpoints. It is diagnostic, not a model-tuning or promotion stage.
