@@ -38,3 +38,8 @@ python mars/benchmark_replay.py
 Истории — записи self-play. Replay повторяет зафиксированные заявки соперников; если заявка после изменения состояния превышает текущий бюджет соперника, она обрезается. Соперник не адаптирует действия к новому состоянию, поэтому replay — только диагностический тест, а не официальный score и не точная симуляция скрытых стратегий.
 
 Официальный балл v3 можно узнать только после отправки решения на платформу.
+
+
+## Submission status
+
+**Not recommended for submission:** the user-reported official platform score for v3 is **6.122**, below the previously reported v1/v2 results (6.24 / 6.236). Keep this branch for experiment history only. The best known submission baseline remains v1/v2.
