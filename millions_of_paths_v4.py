@@ -1,6 +1,7 @@
 import sys
 import os
 import heapq
+import functools
 from array import array
 
 
