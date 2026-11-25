@@ -2,7 +2,7 @@ name: Mars agent checks
 
 on:
   push:
-    branches: [task-06-mars-v1]
+    branches: [task-06-mars-v1, task-06-mars-v2]
     paths:
       - "mars/**"
       - ".github/workflows/mars-tests.yml"
