@@ -85,6 +85,18 @@ def _evaluate_with_trace(name, model_path, n_episodes, seed, horizon):
     timeout = _as_cpu_tensor(env.truncated).numpy().astype(int)
     hull = _as_cpu_tensor(env.hull_contact).numpy().astype(int)
     steps = _as_cpu_tensor(env.steps).numpy().astype(int)
+    final_x = _as_cpu_tensor(env.x).numpy().astype(float)
+    final_y = _as_cpu_tensor(env.y).numpy().astype(float)
+    final_settle = _as_cpu_tensor(env.settle_time).numpy().astype(float)
+
+    # Match CELL 09 terminal classification exactly:
+    # LANDED > HULL_CONTACT > TIMEOUT > OUT_OF_BOUNDS > INVALID_LANDING > OTHER.
+    status = np.full(n_episodes, "OTHER", dtype=object)
+    status[final_settle >= 0.5 - 1e-10] = "INVALID_LANDING"
+    status[(np.abs(final_x) >= 39.999) | (final_y >= 59.999)] = "OUT_OF_BOUNDS"
+    status[timeout == 1] = "TIMEOUT"
+    status[hull == 1] = "HULL_CONTACT"
+    status[landed == 1] = "LANDED"
 
     rows = []
     for i in range(n_episodes):
@@ -97,6 +109,10 @@ def _evaluate_with_trace(name, model_path, n_episodes, seed, horizon):
             "timeout": int(timeout[i]),
             "hull_contact": int(hull[i]),
             "steps": int(steps[i]),
+            "status": str(status[i]),
+            "final_x": float(final_x[i]),
+            "final_y": float(final_y[i]),
+            "final_settle_time": float(final_settle[i]),
         }
         for j, feature in enumerate(FEATURE_NAMES):
             row[f"initial_{feature}"] = float(initial_obs[i, j])
@@ -187,15 +203,6 @@ def run_cell11b1(
     targets = episodes[
         episodes["family"].isin(["crosswind", "recovery"])
     ].copy()
-    targets["status"] = np.select(
-        [
-            targets["landed"].eq(1),
-            targets["hull_contact"].eq(1),
-            targets["timeout"].eq(1),
-        ],
-        ["LANDED", "HULL_CONTACT", "TIMEOUT"],
-        default="OTHER",
-    )
 
     episodes.to_csv(reports_dir / "cell11b1_episode_diagnostics.csv", index=False)
     actions.to_csv(reports_dir / "cell11b1_action_distribution.csv", index=False)
@@ -209,13 +216,20 @@ def run_cell11b1(
     print("\nFAMILY SUMMARY")
     print(family_summary.round(3).to_string(index=False))
 
+    print("\nTERMINAL STATUS COUNTS BY FAMILY")
+    status_summary = (
+        episodes.groupby(["model", "family", "status"])
+        .size().unstack(fill_value=0).reset_index()
+    )
+    print(status_summary.to_string(index=False))
+
     print("\nCROSSWIND / RECOVERY FAILURE DETAIL")
     cols = [
         "model", "episode_id", "family", "status", "return",
         "initial_wind", "initial_relative_x", "initial_vx",
         "initial_vy", "final_relative_x", "final_height",
         "final_vx", "final_vy", "final_sin_theta",
-        "final_omega", "steps",
+        "final_omega", "final_x", "final_y", "final_settle_time", "steps",
     ]
     print(targets[cols].round(3).to_string(index=False))
 
@@ -227,6 +241,8 @@ def run_cell11b1(
         .to_string()
     )
 
+    print("\nNOTE: initial_*/final_* feature columns are normalized model observations.")
+    print("Terminal statuses use the same ordered rules as CELL 09.")
     print("\nQC: PASS")
     print("Development seed:", seed)
     print("Final holdout: DO NOT use this seed for final claims.")
