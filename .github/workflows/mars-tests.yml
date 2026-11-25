@@ -2,7 +2,7 @@ name: Mars agent checks
 
 on:
   push:
-    branches: [task-06-mars-v1]
+    branches: [task-06-mars-v1, task-06-mars-v4]
     paths:
       - "mars/**"
       - ".github/workflows/mars-tests.yml"
@@ -23,3 +23,5 @@ jobs:
         run: python -m unittest -v mars.test_solution
       - name: Exact history validation
         run: python mars/simulate.py
+      - name: Diagnostic fixed-history replay
+        run: python mars/benchmark_replay.py
