@@ -4,15 +4,15 @@
 
 ## Versions
 
-- `solution_best_4_3.py` — exact user-supplied baseline; reported official score 4.3.
-- `solution_v5.py` — experimental V5 candidate.
-- `solution_v3.py` — earlier 46-policy experiment.
-- `solution_v4.py` — earlier adaptive-continuation experiment.
-- `test_solution_v5.py` — simulator equivalence and randomized protocol tests.
-- `V5_REPORT.md` — benchmark and validation report.
+- solution_best_4_3.py — исходный пользовательский set-based алгоритм; ранее сообщался результат 4.3.
+- solution_v11.py — оптимизация исходного пятистратегийного алгоритма без намеренного изменения решений.
+- test_v11.py — дифференциальные тесты против буквальной set-based реализации.
+- V11_REPORT.md — результаты проверок и локальный benchmark.
+- solution_v5.py — отдельная экспериментальная версия с восемью моделями; не является базой V11.
+- solution_v3.py and solution_v4.py — предыдущие эксперименты.
 
-## V5
+## V11 design
 
-V5 preserves the best baseline's three continuation policies and the 70% maximum + 30% mean objective. It adds three targeted opponent-policy hypotheses, replaces the binary posterior update with a soft-rank Bayesian likelihood, and uses bitmasks to accelerate simulation.
+V11 preserves the five original opponent strategies, three own continuation policies, 70/30 objective, original tie-break terms, and 1.25/0.85 updates including opponent passes. It replaces repeated set/order scans inside simulations with rank bitmasks and capacity masks. The available set is retained for candidate iteration order.
 
-Local synthetic results are not official contest scores. The official V5 result is not yet known.
+Local differential tests are not official contest scores. V11 has not yet been submitted to the official judge.
