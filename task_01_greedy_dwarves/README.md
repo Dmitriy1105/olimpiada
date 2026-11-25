@@ -1,27 +1,18 @@
 # Task 1 — Жадные гномы
 
-Интерактивное решение на Python 3.11+.
+Интерактивная задача, Python 3.11+.
 
-## Файлы
+## Versions
 
-- solution_v4.py — текущая экспериментальная версия с адаптивной оценкой продолжения.
-- solution_v3.py — предыдущая версия с расширенной библиотекой из 46 моделей.
-- local_interactor.py — локальная проверка интерактивного протокола V3.
-- test_solution_v4.py — 100 рандомизированных проверок корректности V4.
-- V4_REPORT.md — алгоритм, результаты локального сравнения и ограничения.
+- `solution_best_4_3.py` — exact user-supplied baseline; reported official score 4.3.
+- `solution_v5.py` — experimental V5 candidate.
+- `solution_v3.py` — earlier 46-policy experiment.
+- `solution_v4.py` — earlier adaptive-continuation experiment.
+- `test_solution_v5.py` — simulator equivalence and randomized protocol tests.
+- `V5_REPORT.md` — benchmark and validation report.
 
-## Запуск
+## V5
 
-Запуск решения: python solution_v4.py
+V5 preserves the best baseline's three continuation policies and the 70% maximum + 30% mean objective. It adds three targeted opponent-policy hypotheses, replaces the binary posterior update with a soft-rank Bayesian likelihood, and uses bitmasks to accelerate simulation.
 
-Проверка V4: python test_solution_v4.py
-
-## Идея V4
-
-В рамках одного теста все соперники используют одну неизвестную стратегию. Решение поддерживает общий posterior по десяти моделям выбора.
-
-Главное изменение V4 — оценка будущих ходов учитывает, что после получения действий соперников мы сможем уточнить их стратегию и изменить собственную стратегию продолжения. Оценка объединяет консервативный сценарий с адаптивным.
-
-## Ограничение
-
-Локальные benchmark используют синтетические стратегии. Они не раскрывают стратегию официального жюри и не гарантируют официальный балл. Официальный результат V4 ещё не получен.
+Local synthetic results are not official contest scores. The official V5 result is not yet known.
