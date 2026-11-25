@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-V12_PATH = Path("/mnt/data/gnomes_v12/solution_v12.py")
+V12_PATH = ROOT / "solution_v12.py"
 V14_PATH = ROOT / "solution_v14.py"
 
 
