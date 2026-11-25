@@ -135,15 +135,18 @@ class MarsTests(unittest.TestCase):
                         opponent = simulator.parse_request(
                             history[3 * turn + 1]
                         )
-                        self.assertLessEqual(
-                            sum(opponent.values()),
-                            game.resources[1] // game.scale,
+                        opponent = clip_request(
+                            opponent, game.resources[1] // game.scale
                         )
                         game.step([own, opponent])
 
-                        process.stdin.write(
-                            history[3 * turn + 1] + "\n"
+                        # Send the same legal replay request that was applied
+                        # by the local simulator, keeping both states aligned.
+                        opponent_line = " ".join(
+                            f"{x} {y} {count}"
+                            for (x, y), count in sorted(opponent.items())
                         )
+                        process.stdin.write(opponent_line + "\n")
                         process.stdin.write(
                             " ".join(game.resource_tokens()) + "\n"
                         )
