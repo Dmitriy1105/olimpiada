@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Interactive agent for "Освоение Марса" (protocol v3), Python 3.11.
+"""Mars settlement agent — Python 3.11, interactive protocol v3.
 
-The agent uses exact fixed-point arithmetic for game resources and robot
-counts. Its placement policy greedily allocates robots by their marginal
-long-term production, with a small bonus for opening valuable frontier cells.
-Only the standard library is required.
+v2 policy:
+- exact marginal production over the remaining horizon;
+- a one-time bonus for opening new frontier cells;
+- ties favour cells in an opponent's current frontier, then cells with
+  more free neighbours;
+- a heap merges per-cell diminishing-return sequences efficiently.
+Only the Python standard library is required.
 """
-
 from __future__ import annotations
 
 import heapq
-import math
 import sys
 from collections import defaultdict, deque
 from typing import Dict, Iterable, List, Set, Tuple
@@ -20,27 +21,24 @@ Request = Dict[Cell, int]
 
 
 def scaled_decimal(token: str, places: int) -> int:
-    """Convert a non-negative finite decimal to an integer at 10**(-places)."""
-    whole, dot, fraction = token.partition(".")
+    whole, _, fraction = token.partition(".")
     if len(fraction) > places:
-        raise ValueError("decimal precision exceeds the initial scale")
+        raise ValueError("decimal precision exceeds initial scale")
     return int(whole) * (10 ** places) + int(fraction.ljust(places, "0") or "0")
 
 
 def parse_request(line: str) -> Request:
-    values = line.split()
-    if not values:
+    tokens = line.split()
+    if not tokens:
         return {}
-    if len(values) % 3:
+    if len(tokens) % 3:
         raise ValueError("incomplete request triple")
     result: Request = {}
-    for i in range(0, len(values), 3):
-        x, y, count = int(values[i]), int(values[i + 1]), int(values[i + 2])
-        if count <= 0:
-            raise ValueError("request counts must be positive")
+    for i in range(0, len(tokens), 3):
+        x, y, count = int(tokens[i]), int(tokens[i + 1]), int(tokens[i + 2])
         cell = (x, y)
-        if cell in result:
-            raise ValueError("duplicate cell in request")
+        if count <= 0 or cell in result:
+            raise ValueError("invalid or duplicate request cell")
         result[cell] = count
     return result
 
@@ -90,7 +88,12 @@ def read_initial():
 
 
 class MarsAgent:
-    def __init__(self, initial_data, expansion_weight: float = 1.5):
+    def __init__(
+        self,
+        initial_data,
+        expansion_weight_num: int = 12,
+        tie_degree_num: int = 4,
+    ):
         (
             self.width, self.height, self.players, self.turns,
             self.places, self.scale, initial, self.a, self.b,
@@ -104,283 +107,143 @@ class MarsAgent:
         self.blocked = set(self.obstacles)
         self.blocked.update(self.stations)
         self.turn = 0
-        self.expansion_weight = expansion_weight
+        self.expansion_weight_num = expansion_weight_num
+        self.tie_degree_num = tie_degree_num
 
-        # Static shortest-path distances are useful for estimating which side
-        # of the map is naturally safer for each player.
-        self.static_distances = [
-            self._distance_from_station(player)
-            for player in range(self.players)
-        ]
-        self.static_margin: Dict[Cell, int] = {}
+        # Stations are blocked as targets but remain valid network sources.
+        self._neighbours: Dict[Cell, List[Cell]] = {}
         for y in range(self.height):
             for x in range(self.width):
                 cell = (x, y)
-                if cell in self.blocked:
-                    continue
-                own_distance = self.static_distances[0].get(cell, 10**6)
-                enemy_distance = min(
-                    (
-                        self.static_distances[p].get(cell, 10**6)
-                        for p in range(1, self.players)
-                    ),
-                    default=10**6,
-                )
-                self.static_margin[cell] = enemy_distance - own_distance
+                self._neighbours[cell] = [
+                    nxt for nxt in (
+                        (x - 1, y), (x + 1, y),
+                        (x, y - 1), (x, y + 1),
+                    )
+                    if 0 <= nxt[0] < self.width
+                    and 0 <= nxt[1] < self.height
+                    and nxt not in self.blocked
+                ]
 
-    def _neighbors(self, cell: Cell) -> Iterable[Cell]:
-        x, y = cell
-        if x > 0:
-            yield (x - 1, y)
-        if x + 1 < self.width:
-            yield (x + 1, y)
-        if y > 0:
-            yield (x, y - 1)
-        if y + 1 < self.height:
-            yield (x, y + 1)
-
-    def _distance_from_station(self, player: int) -> Dict[Cell, int]:
-        start = self.stations[player]
-        distance = {start: 0}
-        queue = deque([start])
-        while queue:
-            cell = queue.popleft()
-            next_distance = distance[cell] + 1
-            for nxt in self._neighbors(cell):
-                if nxt in self.blocked or nxt in distance:
-                    continue
-                distance[nxt] = next_distance
-                queue.append(nxt)
-        return distance
-
-    def _distance_from_network(self, player: int) -> Dict[Cell, int]:
-        """Minimum number of future placements needed to reach each cell."""
-        sources = set(self.robots[player])
-        sources.add(self.stations[player])
-        distance: Dict[Cell, int] = {}
-        queue = deque()
-
-        # A cell adjacent to an existing station/robot can be placed this turn.
-        for source in sources:
-            for cell in self._neighbors(source):
-                if cell in self.blocked or cell in distance:
-                    continue
-                distance[cell] = 1
-                queue.append(cell)
-
-        while queue:
-            cell = queue.popleft()
-            next_distance = distance[cell] + 1
-            for nxt in self._neighbors(cell):
-                if nxt in self.blocked or nxt in distance:
-                    continue
-                distance[nxt] = next_distance
-                queue.append(nxt)
-        return distance
+    def neighbors(self, cell: Cell) -> Iterable[Cell]:
+        return self._neighbours.get(cell, ())
 
     def available_cells(self, player: int) -> Set[Cell]:
         cells: Set[Cell] = set()
-        sources = list(self.robots[player])
-        sources.append(self.stations[player])
-        for source in sources:
-            for cell in self._neighbors(source):
-                if cell not in self.blocked:
-                    cells.add(cell)
+        for source in [self.stations[player], *self.robots[player].keys()]:
+            cells.update(self.neighbors(source))
         return cells
 
-    @staticmethod
-    def _clamp(value: float, low: float, high: float) -> float:
-        return low if value < low else high if value > high else value
+    def distance_from_network(self, player: int) -> Dict[Cell, int]:
+        """Minimum future placement delay; current frontier has distance 1."""
+        distance: Dict[Cell, int] = {}
+        queue = deque()
+        for source in [self.stations[player], *self.robots[player].keys()]:
+            for cell in self.neighbors(source):
+                if cell not in distance:
+                    distance[cell] = 1
+                    queue.append(cell)
+
+        while queue:
+            cell = queue.popleft()
+            next_distance = distance[cell] + 1
+            for nxt in self.neighbors(cell):
+                if nxt not in distance:
+                    distance[nxt] = next_distance
+                    queue.append(nxt)
+        return distance
 
     def _income(self, own_count: int, enemy_count: int) -> int:
-        return own_count * max(
-            0, self.a - self.b * (own_count + enemy_count)
-        )
-
-    def _contest_probability(
-        self,
-        cell: Cell,
-        enemy_distances: List[Dict[Cell, int]],
-        enemy_available_count: int,
-    ) -> float:
-        """Estimate the chance that an opponent adds to this cell later."""
-        nearest = min(
-            (distance.get(cell, 10**6) for distance in enemy_distances),
-            default=10**6,
-        )
-        margin = self.static_margin.get(cell, 0)
-
-        if nearest >= 10**6:
-            probability = 0.02
-        else:
-            probability = 0.72 * math.exp(
-                -0.28 * max(0, nearest - 1)
-            )
-            if margin > 0:
-                probability *= math.exp(-0.16 * margin)
-            elif margin < 0:
-                probability *= math.exp(min(1.0, 0.22 * -margin))
-
-        if enemy_available_count:
-            immediate = min(0.88, 0.42 + 0.16 * (enemy_available_count - 1))
-            probability = max(probability, immediate)
-
-        return self._clamp(probability, 0.02, 0.88)
+        total = own_count + enemy_count
+        return own_count * max(0, self.a - self.b * total)
 
     def choose_request(self) -> Request:
         remaining_turns = self.turns - self.turn
         available = self.available_cells(0)
-        if not available:
-            return {}
-
-        enemy_available = [
-            self.available_cells(player)
-            for player in range(1, self.players)
-        ]
-        # Dynamic distances reflect the actual frontiers, not just stations.
-        enemy_distances = [
-            self._distance_from_network(player)
-            for player in range(1, self.players)
-        ]
-
-        def contest_probability(cell: Cell) -> float:
-            count = sum(cell in cells for cells in enemy_available)
-            return self._contest_probability(
-                cell, enemy_distances, count
-            )
-
-        # A newly occupied frontier cell opens its currently inaccessible
-        # neighbours on the next turn. Divide shared neighbours among the
-        # candidate cells so that the same opening is not counted repeatedly.
-        coverage = defaultdict(int)
-        for cell in available:
-            if self.robots[0].get(cell, 0) != 0:
-                continue
-            for nxt in self._neighbors(cell):
-                if nxt not in self.blocked and nxt not in available:
-                    coverage[nxt] += 1
-
-        expansion_bonus: Dict[Cell, float] = {}
-        for cell in available:
-            if self.robots[0].get(cell, 0) > 0:
-                expansion_bonus[cell] = 0.0
-                continue
-
-            bonus = 0.0
-            for nxt in self._neighbors(cell):
-                if nxt in self.blocked or nxt in available:
-                    continue
-
-                enemy_count = sum(
-                    self.robots[p].get(nxt, 0)
-                    for p in range(1, self.players)
-                )
-                probability = contest_probability(nxt)
-                first_income = max(
-                    0, self.a - self.b * (1 + enemy_count)
-                )
-                contested_income = max(
-                    0, self.a - self.b * (2 + enemy_count)
-                )
-                expected_income = (
-                    (1.0 - probability) * first_income
-                    + probability * contested_income
-                )
-
-                future_profit = max(
-                    0.0,
-                    (remaining_turns - 1) * expected_income - self.scale,
-                )
-                margin = self.static_margin.get(nxt, 0)
-                safety = self._clamp(0.55 + 0.08 * margin, 0.20, 1.0)
-                degree = sum(
-                    neighbour not in self.blocked
-                    for neighbour in self._neighbors(nxt)
-                )
-                branching = 1.0 + 0.08 * max(0, degree - 1)
-                future_profit *= safety * branching
-                future_profit /= max(1, coverage[nxt])
-                bonus += future_profit
-
-            # Small enough not to dominate direct production, but sufficient
-            # to prefer useful branches when current marginal yields are close.
-            expansion_bonus[cell] = self.expansion_weight * bonus
-
         budget = self.resources[0] // self.scale
-        if budget <= 0:
+        if remaining_turns <= 0 or budget <= 0 or not available:
             return {}
 
-        # Heap entries hold the next robot's marginal value for each cell.
-        # All values are expressed in scaled resource units.
+        own_distance = self.distance_from_network(0)
+        enemy_distances = [
+            self.distance_from_network(player)
+            for player in range(1, self.players)
+        ]
+        enemy_total = {
+            cell: sum(
+                self.robots[player].get(cell, 0)
+                for player in range(1, self.players)
+            )
+            for cell in available
+        }
+
+        # On equal economic value, claim the shared frontier first.
+        tie_priority: Dict[Cell, int] = {}
+        for cell in available:
+            nearest_enemy = min(
+                (dist.get(cell, 10**6) for dist in enemy_distances),
+                default=10**6,
+            )
+            margin = nearest_enemy - own_distance.get(cell, 1)
+            degree = len(self.neighbors(cell))
+            tie_priority[cell] = -100 * margin + self.tie_degree_num * degree
+
         heap = []
-        probabilities: Dict[Cell, float] = {}
         for cell in available:
             own_count = self.robots[0].get(cell, 0)
-            enemy_count = sum(
-                self.robots[p].get(cell, 0)
-                for p in range(1, self.players)
+            enemy_count = enemy_total[cell]
+            delta = (
+                self._income(own_count + 1, enemy_count)
+                - self._income(own_count, enemy_count)
             )
-            probability = contest_probability(cell)
-            probabilities[cell] = probability
+            if delta <= 0:
+                continue
 
-            current = (
-                (1.0 - probability) * self._income(own_count, enemy_count)
-                + probability * self._income(own_count, enemy_count + 1)
-            )
-            after_one = (
-                (1.0 - probability) * self._income(own_count + 1, enemy_count)
-                + probability * self._income(own_count + 1, enemy_count + 1)
-            )
-            marginal = after_one - current
+            bonus = 0
+            if own_count == 0 and remaining_turns > 1:
+                fresh = sum(
+                    1 for nxt in self.neighbors(cell)
+                    if nxt not in available
+                )
+                bonus = (
+                    fresh * (remaining_turns - 1)
+                    * (self.a - self.b) * self.expansion_weight_num
+                ) // 100
 
-            bonus = expansion_bonus[cell] if own_count == 0 else 0.0
-            score = remaining_turns * marginal - self.scale + bonus
-
-            margin = self.static_margin.get(cell, 0)
-            degree = sum(
-                neighbour not in self.blocked
-                for neighbour in self._neighbors(cell)
-            )
-            tie = 0.10 * margin + 0.04 * degree
-            heapq.heappush(heap, (-score, -tie, cell))
+            net_value = delta * remaining_turns + bonus - self.scale
+            if net_value > 0:
+                x, y = cell
+                heapq.heappush(
+                    heap,
+                    (-net_value, -tie_priority[cell], x, y, cell, own_count),
+                )
 
         request: Dict[Cell, int] = defaultdict(int)
+
+        # Each cell has diminishing marginal returns. The heap merges these
+        # per-cell sequences without rescanning the whole frontier per robot.
         while budget > 0 and heap:
-            negative_score, negative_tie, cell = heapq.heappop(heap)
-            if -negative_score <= 0.0:
+            neg_value, neg_tie, x, y, cell, own_count = heapq.heappop(heap)
+            if -neg_value <= 0:
                 break
 
             request[cell] += 1
             budget -= 1
+            own_count += 1
 
-            own_count = self.robots[0].get(cell, 0) + request[cell]
-            enemy_count = sum(
-                self.robots[p].get(cell, 0)
-                for p in range(1, self.players)
+            enemy_count = enemy_total[cell]
+            delta = (
+                self._income(own_count + 1, enemy_count)
+                - self._income(own_count, enemy_count)
             )
-            probability = probabilities[cell]
+            net_value = delta * remaining_turns - self.scale
+            if net_value > 0:
+                heapq.heappush(
+                    heap,
+                    (-net_value, neg_tie, x, y, cell, own_count),
+                )
 
-            current = (
-                (1.0 - probability) * self._income(own_count, enemy_count)
-                + probability * self._income(own_count, enemy_count + 1)
-            )
-            after_one = (
-                (1.0 - probability) * self._income(own_count + 1, enemy_count)
-                + probability * self._income(own_count + 1, enemy_count + 1)
-            )
-            marginal = after_one - current
-
-            # The frontier bonus is paid only for the first robot in a cell.
-            score = remaining_turns * marginal - self.scale
-            heapq.heappush(
-                heap, (-score, negative_tie, cell)
-            )
-
-        return {
-            cell: count
-            for cell, count in request.items()
-            if count > 0
-        }
+        return dict(request)
 
     def update(
         self,
@@ -392,13 +255,11 @@ class MarsAgent:
         if len(requests) != self.players:
             raise ValueError("wrong number of player requests")
 
-        # Availability is evaluated from the snapshot at the beginning
-        # of the turn, before any player's new robots are installed.
+        # Accessibility is frozen at the start of the turn for every player.
         available = [
             self.available_cells(player)
             for player in range(self.players)
         ]
-
         for player, request in enumerate(requests):
             for cell, count in request.items():
                 if cell in available[player]:
@@ -414,9 +275,7 @@ class MarsAgent:
 
 def main() -> int:
     try:
-        initial_data = read_initial()
-        agent = MarsAgent(initial_data)
-
+        agent = MarsAgent(read_initial())
         for _ in range(agent.turns):
             request = agent.choose_request()
             line = " ".join(
@@ -430,23 +289,22 @@ def main() -> int:
             for _player in range(agent.players - 1):
                 raw = sys.stdin.buffer.readline()
                 if raw == b"":
-                    return 0
+                    raise EOFError("EOF while reading opponent request")
                 opponent_requests.append(
                     parse_request(raw.decode("ascii").strip())
                 )
 
             raw_resources = sys.stdin.buffer.readline()
             if raw_resources == b"":
-                return 0
-            resource_line = raw_resources.decode("ascii").strip()
-            agent.update(request, opponent_requests, resource_line)
-
-        # The final opponent requests and final resource line have been read.
-        # The protocol then closes stdin; no further stdout is permitted.
+                raise EOFError("EOF while reading resource line")
+            agent.update(
+                request,
+                opponent_requests,
+                raw_resources.decode("ascii").strip(),
+            )
         return 0
     except (EOFError, ValueError, UnicodeDecodeError):
-        # No diagnostics on stdout: any protocol fault is handled by the judge.
-        return 0
+        return 1
 
 
 if __name__ == "__main__":
