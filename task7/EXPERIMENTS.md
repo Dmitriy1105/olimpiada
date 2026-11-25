@@ -128,3 +128,16 @@ Base v2c; one auxiliary hidden neuron selected by smallest absolute path-weight 
 ## CELL 11B.1 — Family performance interpretation and diagnostic plan
 
 From CELL 11A.4 family table (40 episodes/family): v3b vs v2c reward deltas: approach -0.453 (landings 31→31); crosswind +4.611 (1→1 landing, 11→11 hull contacts); fast_descent -0.231 (37→37); lateral +199.350 (21→22); low_thrust +2515.441 (22→35, hull 1→0); recovery -207.153 (23→22). Thus nearly all aggregate v3b improvement comes from low_thrust; crosswind remains severe and unchanged, recovery has a modest regression. Next step is diagnostics, not blind parameter edits: compare v2c/v3b per-episode initial/final observation features and action distributions on a fresh development seed 73129, 240 medium episodes (40/family). Script task7/cell11b1_crosswind_diagnostics.py records all 42 observation features and per-episode action counts; outputs CSVs. Seed is development only and must not be presented as final holdout.
+
+
+## CELL 11B.1 — Crosswind/recovery diagnostic results (development seed 73129)
+
+Пользовательский запуск на общей парной выборке 240 эпизодов (40 на семейство), medium, horizon 800. v2c: R=19680.87, landed=137/240, timeout=0, hull=20. v3b: R=21197.18, landed=145/240, timeout=0, hull=19. Разница v3b−v2c: R=+1516.31, посадки +8, hull −1. Это development-диагностика, не независимый финальный holdout.
+
+По семействам (v3b−v2c): approach R +0.515, посадки без изменения; crosswind R −44.162, посадки 0→0, hull 9→12; fast_descent R −1.054, посадки без изменения; lateral R −175.634, посадки 23→22; low_thrust R +1736.375, посадки 20→29, hull 3→0; recovery R +0.272, посадки без изменения. Прирост в основном обеспечен low_thrust, а crosswind и lateral требуют отдельной диагностики.
+
+Crosswind action distribution практически совпадает: действия 3–5 (50% throttle) не выбирались обеими моделями. Доля нулевой тяги: v2c 61.646%, v3b 61.713%; полной тяги: 38.355% и 38.286%. Направления поворота: left 16.210%→15.469%, center 67.897%→67.123%, right 15.894%→17.407%. Это не доказывает причину отказов, но показывает, что адаптация v3b почти не меняет горизонтальное поведение.
+
+**Исправление отчётности:** первоначальный CELL 11B.1 помечал все эпизоды, не являющиеся LANDED/HULL_CONTACT/TIMEOUT, как OTHER. Это упрощение недостаточно для анализа. Скрипт обновлён: теперь статус вычисляется теми же правилами и в том же порядке, что CELL 09 — LANDED, HULL_CONTACT, TIMEOUT, OUT_OF_BOUNDS, INVALID_LANDING (settle_time >= 0.5−1e−10), OTHER. Добавлены final_x, final_y и final_settle_time. Повторный запуск на seed 73129 нужен только для корректной классификации тех же эпизодов; это не новая выборка. Все initial_*/final_* признаки в CSV — нормализованные входы модели, не физические единицы.
+
+Следующий шаг — повторить CELL 11B.1 на том же seed для получения корректного terminal-status breakdown. Только после этого выбрать ограниченный горизонтальный канал эксперимент; v3b сохранить как текущего экспериментального лидера, v2c — как rollback.
