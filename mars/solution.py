@@ -90,7 +90,7 @@ def read_initial():
 
 
 class MarsAgent:
-    def __init__(self, initial_data, expansion_weight: float = 1.5):
+    def __init__(self, initial_data, expansion_weight: float = 1.25):
         (
             self.width, self.height, self.players, self.turns,
             self.places, self.scale, initial, self.a, self.b,
@@ -225,7 +225,7 @@ class MarsAgent:
             immediate = min(0.88, 0.42 + 0.16 * (enemy_available_count - 1))
             probability = max(probability, immediate)
 
-        return self._clamp(probability, 0.02, 0.88)
+        return self._clamp(0.89 * probability, 0.0, 0.88)
 
     def choose_request(self) -> Request:
         remaining_turns = self.turns - self.turn
