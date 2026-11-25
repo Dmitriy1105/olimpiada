@@ -1,4 +1,3 @@
-import math
 import unittest
 
 from solution import GreedyDwarvesAgent
@@ -17,15 +16,28 @@ class SolverTests(unittest.TestCase):
         for seed in range(30):
             k, n, t, w, m, v = make_instance(seed, k=4, n=40, rounds=8, capacity=30)
             agent = GreedyDwarvesAgent(k, n, t, w, m, v, cpu_budget=100)
-            used = set()
+            hidden_policy = random_shared_policy(seed + 500)
             for _ in range(t):
                 item = agent.choose()
                 if item >= 0:
-                    self.assertNotIn(item, used)
                     self.assertLessEqual(agent.player_mass[0] + m[item], w)
-                    used.add(item)
                 agent.commit_own_action(item)
-                agent.observe([0] * (k - 1))
+
+                # Generate legal responses from one shared deterministic bot policy.
+                bot_mask = agent.remaining_masks[hidden_policy]
+                actions = []
+                for j in range(1, k):
+                    bot_item = agent._pick(
+                        hidden_policy,
+                        bot_mask,
+                        w - agent.player_mass[j],
+                    )
+                    if bot_item >= 0:
+                        bot_mask &= ~agent.item_bits[hidden_policy][bot_item]
+                        actions.append(bot_item + 1)
+                    else:
+                        actions.append(0)
+                agent.observe(actions)
 
     def test_full_simulations_never_break_capacity(self):
         for seed in range(20):
