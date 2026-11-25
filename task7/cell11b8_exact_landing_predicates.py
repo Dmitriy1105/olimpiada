@@ -231,8 +231,6 @@ def run_cell11b8(models_dir, reports_dir):
                            lambda x: int((x.str.count(r"\+") > 0).sum())),
             mean_abs_theta_deg=("abs_theta_deg", "mean"),
             median_abs_theta_deg=("abs_theta_deg", "median"),
-            mean_abs_pad_offset=("final_x",
-                                 lambda x: float("nan")),
             mean_abs_foot_y=("max_abs_foot_y", "mean"),
         )
         .reset_index()
@@ -250,7 +248,7 @@ def run_cell11b8(models_dir, reports_dir):
     summary.to_csv(summary_path, index=False)
 
     print("\nCELL 11B.8 — EXACT FAILURE PREDICATES (INVALID LANDINGS)")
-    print(summary.drop(columns=["mean_abs_pad_offset"]).round(4).to_string(index=False))
+    print(summary.round(4).to_string(index=False))
     print("\nFAILURE SIGNATURES")
     print(
         invalid.groupby(["model", "failed_predicates"])
