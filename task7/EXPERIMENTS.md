@@ -108,3 +108,8 @@ QC PASS, экспорт и повторная загрузка кандидат�
 ## CELL 11A — Planned adaptive channel screening
 
 Base v2c; one auxiliary hidden neuron selected by smallest absolute path-weight proxy, replaced with tanh gate based on visible normalized gravity and thrust. Threshold thrust/g=1.675 follows public medium-profile ranges, not hidden flights. Correction to second hidden preactivation: alpha*(1+gate)/2. Candidates alpha=0 (ablation), 0.0096, 0.0192, 0.0288 plus unchanged v2c; new development seed 61429, 24 flights. Local shape/finite smoke test of equivalent candidate passed (24×9, 2729 parameters); actual performance not yet measured. This is an approximation, not exact switching between v1/v2c. Validate on fresh seeds before promotion. Code: adaptive_v3.py.
+
+
+## CELL 11A.2 — Adaptive model screening
+
+Пользовательский запуск на development seed 61429, 24 полёта (4 на семейство), medium, horizon 800. Результаты: v2c R=1471.778, landed=11, timeout=0, hull=2; v3_control R=1472.488, landed=11; v3a R=1671.545, landed=12; v3b R=1859.718, landed=13, timeout=0, hull=2; v3c R=1368.117, landed=10, timeout=4, hull=2. v3b прирост +387.940 (+26.36%) относительно v2c. По low_thrust: v2c 1/4 (R=57.505), v3a 2/4 (R=257.254), v3b 3/4 (R=445.427), v3c 0/4 (R=-46.174). Остальные семейства имеют одинаковое число посадок между кандидатами; crosswind 0/4. QC PASS. v3b — предварительный кандидат, не promoted: sample всего 24, подбор alpha выполнялся на этом seed. Следующий шаг CELL 11A.3 — paired validation v2c vs v3b на новом seed 81739, 60 эпизодов (10 на семейство), стратифицированный bootstrap CI по семействам. Не использовать seed 61429 повторно для подтверждения.
