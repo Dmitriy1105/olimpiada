@@ -405,3 +405,56 @@ Compare unchanged v3b, previous candidate v3b_wind_p00192, and selected v3b_wind
 The script reports overall and per-family reward/landing/failure metrics, pairwise comparisons (p00192−v3b, p00384−v3b, p00384−p00192), stratified family-weighted 95% bootstrap CIs, total-reward paired bootstrap CIs, and exact inside/feet/angle failure counts for INVALID_LANDING episodes. It verifies that recomputed exact on_pad predicates agree with env.landed for every settled episode. SHA-256 hashes of the three evaluated checkpoints are recorded in the manifest.
 
 No tuning, candidate generation, promotion, or weight overwrite occurs. CELL 11B.10 is the promotion gate: review all six family results and both paired confidence intervals before selecting a final checkpoint. The selected p00384 candidate must not be treated as final until this run completes.
+
+
+## CELL 11B.10 — locked six-family validation results (seed 681204)
+
+Пользовательский запуск: три модели проверены на одних и тех же 240 matched medium episodes, по 40 на каждое из шести семейств, horizon=800. Все модели получили одинаковые начальные state, params и family arrays. QC PASS; точные landing predicates совпали с env.landed для всех settled episodes. Checkpoint SHA-256 сохранены в manifest.
+
+### Overall
+
+| Model | Return | Landed | Success | Hull | Invalid |
+|---|---:|---:|---:|---:|---:|
+| v3b | 22475.215 | 152/240 | 63.333% | 15 | 73 |
+| p00192 | 22754.356 | 150/240 | 62.500% | 12 | 78 |
+| **p00384** | **26841.944** | **169/240** | **70.417%** | **13** | **58** |
+
+No timeouts or out-of-bounds episodes for any model. Mean absolute final pad offset: v3b 3.022; p00192 1.753; p00384 1.157.
+
+### Paired comparisons
+
+| Candidate − reference | Wins/Losses/Ties | Mean delta per episode | Family-weighted 95% CI | Total reward delta | Total 95% CI | Landing delta |
+|---|---:|---:|---:|---:|---:|---:|
+| p00192 − v3b | 87/54/99 | +1.1631 | [-2.5852, 4.4784] | +279.140 | [-629.978, 1127.739] | -2 |
+| **p00384 − v3b** | **88/53/99** | **+18.1947** | **[11.8034, 24.4092]** | **+4366.729** | **[2401.970, 6475.365]** | **+17** |
+| p00384 − p00192 | 34/6/200 | +17.0316 | [10.8868, 23.0625] | +4087.589 | [2292.847, 6012.307] | +19 |
+
+For p00384 against v3b: hull-contact delta=-2 and invalid-landing delta=-15. Both reported 95% intervals exclude zero. p00192 against v3b remains statistically uncertain because both intervals include zero.
+
+### Family-level results
+
+| Family | v3b landed | p00384 landed | v3b return | p00384 return | Return delta |
+|---|---:|---:|---:|---:|---:|
+| approach | 29/40 | 28/40 | 3932.274 | 3731.740 | -200.534 |
+| crosswind | 2/40 | **20/40** | -1668.764 | **2889.694** | **+4558.458** |
+| fast_descent | 35/40 | 35/40 | 6484.589 | 6484.993 | +0.404 |
+| lateral | 28/40 | 28/40 | 4726.726 | 4733.593 | +6.867 |
+| low_thrust | 32/40 | 32/40 | 4889.120 | 4889.240 | +0.120 |
+| recovery | 26/40 | 26/40 | 4111.270 | 4112.685 | +1.415 |
+
+Interpretation: the improvement is concentrated in crosswind, where landings rise from 2/40 to 20/40, hull contacts fall 8→7, invalid landings fall 30→13, and mean absolute final pad offset falls 13.012→1.832. The approach family regresses by one landing and -200.534 reward; the other four families retain the same landing counts and have near-zero reward deltas. This is a clear family-specific tradeoff, not a uniform improvement across all scenarios.
+
+### Landing-predicate diagnosis
+
+For crosswind INVALID_LANDING:
+- v3b: 30 invalid; failed inside=30, feet=30, angle=16.
+- p00192: 33 invalid; failed inside=33, feet=33, angle=24.
+- p00384: 13 invalid; failed inside=13, feet=11, angle=1.
+
+The p00384 candidate reduces the number of invalid crosswind landings and almost eliminates angle failures in that family, but remaining invalid episodes still fail the inside predicate. Do not change simulator acceptance thresholds.
+
+### Promotion decision
+
+Promote v3b_wind_p00384 (alpha=0.0384) as the current locally validated champion for Task 7. The independent balanced six-family validation supports the improvement over v3b: +17 landings, +4366.729 reward, and positive paired bootstrap intervals. Retain v3b and p00192 as immutable comparison checkpoints. The result is a local simulator validation, not an official contest score or a guarantee on hidden tests.
+
+Next: CELL 11B.11 packages the exact SHA-256-verified p00384 checkpoint as a separate weights.pt artifact, re-loads it with the participant loader, checks tensor schema and runs inference-only smoke test. No source checkpoint or pre-existing submission file is overwritten.
