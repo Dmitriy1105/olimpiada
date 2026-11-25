@@ -366,3 +366,42 @@ Mean absolute final centre offset among invalid episodes: v3b 11.1416; wind cand
 Script: `task7/cell11b9_wind_gain_screen.py`. Since CELL 11B.8 found `inside` failure in every invalid crosswind landing, the next experiment changes only the signed-wind feed-forward amplitude, retaining the existing v3b vertical gate and verified horizontal output channel. Compare unchanged v3b, current candidate `v3b_wind_p00192`, and four stronger positive amplitudes alpha=0.0240, 0.0288, 0.0384, 0.0480 on the same fresh 48-episode crosswind sample (seed 51739, medium, horizon 800).
 
 The script recomputes the exact three landing predicates for every terminal state and verifies the recomputed `on_pad` agrees with `env.landed` for settled episodes. It reports paired reward deltas against p00192, landing/hull/invalid counts, final pad offset, and predicate failures. Candidate weights are written under new names; existing v2c, v3b and p00192 checkpoints are not overwritten. This remains a development screen; any selected candidate requires a fresh balanced six-family validation before promotion.
+
+
+## CELL 11B.9 — stronger signed-wind gain screening results (seed 51739)
+
+Пользовательский запуск: 48 matched crosswind episodes per model, medium, horizon 800. QC PASS. Candidate weights were saved separately; original v2c, v3b and p00192 checkpoints were not overwritten.
+
+| Model | Total reward | Landed | Hull | Invalid | Mean absolute final pad offset |
+|---|---:|---:|---:|---:|---:|
+| v3b | -2335.396 | 0/48 | 15 | 33 | 11.272 |
+| p00192 | -1340.660 | 1/48 | 11 | 36 | 4.105 |
+| p00240 | -610.128 | 4/48 | 7 | 37 | 3.170 |
+| p00288 | 2353.028 | 18/48 | 2 | 28 | 1.966 |
+| **p00384** | **3925.299** | **26/48** | **6** | **16** | **1.146** |
+| p00480 | 1764.132 | 16/48 | 4 | 28 | 3.416 |
+
+Paired against p00192:
+- p00240: mean reward delta +15.2194, 95% bootstrap CI [-1.8661, 35.7645], landing delta +3, hull delta -4.
+- p00288: mean reward delta +76.9518, CI [47.3559, 106.8104], landing delta +17, hull delta -9.
+- **p00384: mean reward delta +109.7075, CI [77.6237, 140.6150], landing delta +25, hull delta -5; 40 wins / 8 losses / 0 ties.**
+- p00480: mean reward delta +64.6832, CI [33.6700, 95.1815], landing delta +15, hull delta -7.
+
+Exact invalid-landing predicate failures:
+- p00192: 36 invalid; inside 36, feet 36, angle 25.
+- p00240: 37 invalid; inside 37, feet 35, angle 23.
+- p00288: 28 invalid; inside 28, feet 26, angle 14.
+- **p00384: 16 invalid; inside 16, feet 13, angle 3.**
+- p00480: 28 invalid; inside 28, feet 24, angle 6.
+
+Decision: select v3b_wind_p00384 (alpha=0.0384) as the sole candidate for the next balanced six-family validation. It is clearly best in this 48-episode crosswind development screen. This is not final promotion: selection is conditional on one screen seed, and family-level side effects are unknown. Do not run further alpha sweeps before the full validation gate.
+
+## CELL 11B.10 — locked six-family validation prepared
+
+Script: task7/cell11b10_final_validation.py.
+
+Compare unchanged v3b, previous candidate v3b_wind_p00192, and selected v3b_wind_p00384 on one fresh matched sample: seed 681204, 240 medium episodes, 40 per each of six families, horizon 800. Each model is evaluated on identical initial state, params, and family arrays; the script asserts exact equality before paired comparison.
+
+The script reports overall and per-family reward/landing/failure metrics, pairwise comparisons (p00192−v3b, p00384−v3b, p00384−p00192), stratified family-weighted 95% bootstrap CIs, total-reward paired bootstrap CIs, and exact inside/feet/angle failure counts for INVALID_LANDING episodes. It verifies that recomputed exact on_pad predicates agree with env.landed for every settled episode. SHA-256 hashes of the three evaluated checkpoints are recorded in the manifest.
+
+No tuning, candidate generation, promotion, or weight overwrite occurs. CELL 11B.10 is the promotion gate: review all six family results and both paired confidence intervals before selecting a final checkpoint. The selected p00384 candidate must not be treated as final until this run completes.
