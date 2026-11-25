@@ -48,4 +48,4 @@ v2 не улучшила результат. При аудите кода обн
 - интерактивный протокол;
 - точное воспроизведение десяти историй.
 
-Статус GitHub Actions будет добавлен после завершения запуска.
+GitHub Actions, Python 3.11: **SUCCESS** — run [45657539518](https://github.com/Dmitriy1105/olimpiada/actions/runs/45657539518). Оба шага прошли: unit/interactive protocol tests и exact history validation.
