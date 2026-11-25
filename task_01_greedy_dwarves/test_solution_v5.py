@@ -29,7 +29,12 @@ def reference_sim(agent, first_item, bot_policy, own_policy):
                 masses[j] += agent.m[chosen]
                 values[j] += agent.v[chosen]
                 changed = True
-        if not changed:
+
+        if not available:
+            break
+        # The current round starts after our move, so no bot action in this
+        # round does not imply that we cannot take an item in a later round.
+        if r > agent.round_no and not changed:
             break
 
     return values[0] if masses[0] < max(masses[1:]) else 0
@@ -56,12 +61,12 @@ def test_simulator_matches_set_reference():
         agent.values = [rng.randint(0, 300) for _ in range(k)]
         agent.round_no = rng.randrange(t)
 
-        available = [
+        candidates = [
             i for i in range(n)
-            if (agent.available_mask >> i) & 1
+            if ((agent.available_mask >> i) & 1)
             and agent.m[i] + agent.masses[0] <= w
         ]
-        for item in available:
+        for item in candidates:
             for bp in range(agent.P):
                 for op in agent.own_policies:
                     got = agent._simulate(item, bp, op)
