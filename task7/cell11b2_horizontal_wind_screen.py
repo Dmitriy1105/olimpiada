@@ -73,16 +73,19 @@ def _make_wind_candidate(base_model, alpha, sharpness=WIND_SHARPNESS):
     ]
     wind_gate = min(available, key=lambda j: float(influence[j]))
 
-    # The new hidden neuron responds only to signed normalized wind.
-    # At zero wind its output is exactly zero, preserving non-crosswind input.
-    w0[wind_gate].zero_()
-    b0[wind_gate].zero_()
-    w0[wind_gate, 12] = float(sharpness)
+    # Parameter edits are structural surgery, not a differentiable operation.
+    # Disable autograd explicitly: model parameters require gradients by default.
+    with torch.no_grad():
+        # The new hidden neuron responds only to signed normalized wind.
+        # At zero wind its output is exactly zero, preserving non-crosswind input.
+        w0[wind_gate].zero_()
+        b0[wind_gate].zero_()
+        w0[wind_gate, 12] = float(sharpness)
 
-    # Route signed wind to the existing horizontal turn-control neuron.
-    # No bias shift: positive and negative wind produce opposite corrections.
-    w2[:, wind_gate].zero_()
-    w2[1, wind_gate] = float(alpha)
+        # Route signed wind to the existing horizontal turn-control neuron.
+        # No bias shift: positive and negative wind produce opposite corrections.
+        w2[:, wind_gate].zero_()
+        w2[1, wind_gate] = float(alpha)
 
     return model, vertical_gate, wind_gate, float(influence[wind_gate])
 
