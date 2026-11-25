@@ -59,4 +59,4 @@ Python 3.11 was not available in the local container. The source uses only stand
 
 The adaptive blend improves both local paired datasets by about 0.004 in normalized reward, while changing no opponent-model assumptions. This is encouraging but remains a synthetic result, not a guarantee about hidden official tests.
 
-Keep V12 unchanged as the official 4.676-point rollback. Submit V13 separately and record its official score before making another algorithmic change.
+V13 was submitted and received **4.326 points**, below V12's **4.676**. Keep V12 unchanged as the best official rollback. V13 remains archived as a failed official experiment.
