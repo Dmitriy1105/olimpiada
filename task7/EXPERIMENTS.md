@@ -103,3 +103,8 @@ QC PASS, экспорт и повторная загрузка кандидат�
 ## CELL 10E — Holdout validation
 
 Пользовательский парный прогон на новой выборке 60 полётов (seed 95173, medium, horizon 800). v1: R=3068.522, landed=22, timeout=24, hull=5, mean steps=598.20. v2c: R=5428.768, landed=37, timeout=0, hull=4, mean steps=195.95. Delta R=2360.246 (+76.92%), 43 выигрыша / 17 проигрышей / 0 ничьих. Средний парный прирост=39.337, приближённый 95% bootstrap CI=[6.541,72.167] (обычный непараметрический bootstrap из ячейки, не стратифицированный). QC PASS, EXPERIMENT IMPROVEMENT SUPPORTED. Посадки v1→v2c по семействам: approach 3→10, lateral 4→7, fast_descent 5→9, recovery 0→7, low_thrust 10→4, crosswind 0→0. v2c — локальный лидер; официальный балл пока неизвестен. Выборка 95173 теперь использована для оценки и диагностики; финальный тест должен использовать новые seed. Следующие направления: исправление регрессии low_thrust, оценка горизонтального канала на отдельных development seeds. Не заменять v2c до сравнительной проверки.
+
+
+## CELL 11A — Planned adaptive channel screening
+
+Base v2c; one auxiliary hidden neuron selected by smallest absolute path-weight proxy, replaced with tanh gate based on visible normalized gravity and thrust. Threshold thrust/g=1.675 follows public medium-profile ranges, not hidden flights. Correction to second hidden preactivation: alpha*(1+gate)/2. Candidates alpha=0 (ablation), 0.0096, 0.0192, 0.0288 plus unchanged v2c; new development seed 61429, 24 flights. Local shape/finite smoke test of equivalent candidate passed (24×9, 2729 parameters); actual performance not yet measured. This is an approximation, not exact switching between v1/v2c. Validate on fresh seeds before promotion. Code: adaptive_v3.py.
