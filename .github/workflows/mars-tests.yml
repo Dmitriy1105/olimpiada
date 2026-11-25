@@ -25,3 +25,5 @@ jobs:
         run: python mars/simulate.py
       - name: Diagnostic fixed-history replay
         run: python mars/benchmark_replay.py
+      - name: Paired v1 versus v4 replay
+        run: python mars/benchmark_compare.py
