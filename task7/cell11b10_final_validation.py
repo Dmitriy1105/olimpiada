@@ -358,9 +358,7 @@ def run_cell11b10(models_dir, reports_dir):
             hull_contacts=("hull_contact", "sum"),
             invalid_landings=("invalid_landing", "sum"),
             timeouts=("timeout", "sum"),
-            mean_abs_final_offset=("final_abs_final_offset", "mean")
-            if "final_abs_final_offset" in flights.columns
-            else ("final_abs_pad_offset", "mean"),
+            mean_abs_final_offset=("final_abs_pad_offset", "mean"),
         )
         .reset_index()
     )
