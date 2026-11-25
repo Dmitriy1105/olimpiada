@@ -168,5 +168,70 @@ class MarsTests(unittest.TestCase):
                         process.stderr.close()
 
 
+    def test_four_player_adaptive_opponent_model(self):
+        initial = (
+            7, 7, 4, 5, 0, 1,
+            20, 10, 1,
+            set(),
+            [(1, 1), (3, 1), (1, 5), (5, 5)],
+        )
+        agent = solution.MarsAgent(initial)
+        candidate = (2, 1)
+
+        own_frontier = agent.available_cells(0)
+        enemy_available = [
+            agent.available_cells(player)
+            for player in range(1, agent.players)
+        ]
+        enemy_distances = [
+            agent._distance_from_network(player)
+            for player in range(1, agent.players)
+        ]
+        before = agent._contest_probabilities(
+            candidate, enemy_distances, enemy_available
+        )
+
+        self.assertEqual(len(before), 3)
+        self.assertTrue(all(0.0 <= p <= 0.88 for p in before))
+        self.assertIn(candidate, own_frontier)
+        self.assertIn(candidate, enemy_available[0])
+
+        # Opponent 1 chooses a cell shared with our current frontier.
+        agent.update(
+            {},
+            [{candidate: 1}, {}, {}],
+            "20 20 20 20",
+        )
+
+        self.assertEqual(agent.opponent_stats[1]["placed"], 1)
+        self.assertEqual(agent.opponent_stats[1]["shared"], 1)
+
+        enemy_available_after = [
+            agent.available_cells(player)
+            for player in range(1, agent.players)
+        ]
+        enemy_distances_after = [
+            agent._distance_from_network(player)
+            for player in range(1, agent.players)
+        ]
+        after = agent._contest_probabilities(
+            candidate, enemy_distances_after, enemy_available_after
+        )
+        self.assertEqual(len(after), 3)
+        self.assertGreater(after[0], before[0])
+
+    def test_four_player_request_respects_budget(self):
+        initial = (
+            7, 7, 4, 5, 0, 1,
+            20, 10, 1,
+            set(),
+            [(1, 1), (3, 1), (1, 5), (5, 5)],
+        )
+        agent = solution.MarsAgent(initial)
+        request = agent.choose_request()
+        self.assertLessEqual(sum(request.values()), 20)
+        self.assertTrue(set(request).issubset(agent.available_cells(0)))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
