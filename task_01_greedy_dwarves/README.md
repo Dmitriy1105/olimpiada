@@ -2,25 +2,31 @@
 
 Интерактивная задача, Python 3.11+.
 
-## Versions and official scores
+## Official-score history
 
-- `solution_v11.py` — официальный результат **4.43**.
-- `solution_v12.py` — текущий лучший официальный результат **4.676**.
-- `solution_v13.py` — официальный результат **4.326**; эксперимент с адаптивным max/mean objective, ниже V12.
-- `solution_v14.py` — эксперимент с более сильным обновлением модели соперников; официальный результат ожидается.
+- \`solution_v11.py\` — 4.43 (reported by the user).
+- \`solution_v12.py\` — **4.676, current best official score**.
+- \`solution_v13.py\` — 4.326 (reported by the user).
+- \`solution_v14.py\` — approximately 4.3 (reported by the user).
+- \`solution_v15.py\` — beam-search experiment; official score pending.
 
-## V14 design
+Never overwrite V12 until a new version receives a higher official score.
 
-V14 is based on V12 and changes only the opponent-model update multipliers:
-- predicted action matches observed action: `1.25 → 2.0`;
-- predicted action differs: `0.85 → 0.5`.
+## V15: beam search with opponent rollouts
 
-All five opponent policies, four own continuation policies, 70/30 objective, pass handling, simulation logic, and tie-break terms are retained from V12.
+V15 keeps the five V12 opponent hypotheses and their online multiplicative weights. V12's four own greedy continuation policies are retained for rollouts, but the main decision now uses a two-round beam search over our future actions:
+- shortlist up to 14 first actions using the V12 evaluator;
+- branch over up to 6 diverse feasible future actions;
+- simulate sequential responses from all opponents under each hidden-policy hypothesis;
+- prune with value-maximizing and value-density rollouts;
+- evaluate surviving states with the four V12 continuation policies.
 
-## Tests and reports
+Search settings: beam width 4, branch factor 6, depth 2.
 
-- `V11_REPORT.md`, `V12_REPORT.md`, `V13_REPORT.md`, `V14_REPORT.md` — experiment reports.
-- `bench_v14.py` — paired synthetic V12/V14 benchmark.
-- `test_protocol_v14.py` — maximum-size interactive protocol test.
+## Validation files
 
-**Do not overwrite V12.** Keep it as the 4.676-point rollback version until an experiment receives a higher official score. Synthetic benchmark results are not official judge scores.
+- \`V11_REPORT.md\`, \`V12_REPORT.md\`, \`V13_REPORT.md\`, \`V14_REPORT.md\`, \`V15_REPORT.md\` — experiment records.
+- \`bench_v15.py\` — reproducible paired synthetic V12/V15 comparison.
+- \`test_protocol_v15.py\` — maximum-parameter interactive protocol test.
+
+V15's local synthetic results are not official judge scores. V12 remains the rollback baseline until the official result is known.
