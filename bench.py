@@ -1,33 +1,41 @@
+"""Compare the adaptive agent with simple policies against one shared bot strategy."""
 from statistics import mean
 
-from simulator import make_instance, random_opponents, run_game
+from simulator import make_instance, run_game
 
-SEEDS = 60
+SEEDS = 20
 K, N, T, W = 5, 60, 15, 35
+
+# The hidden policy is selected once per test and is shared by every opponent.
+# The candidate agent is evaluated on the same instances and opponents as baselines.
 modes = {
-    "agent": ("agent", 0),
+    "adaptive_agent": ("agent", 0),
     "max_value": ("fixed", 0),
     "value_per_mass": ("fixed", 1),
     "value_per_sqrt_mass": ("fixed", 2),
-    "value_minus_1.5m": ("fixed", 4),
-    "min_mass": ("fixed", 6),
+    "linear_penalty": ("fixed", 4),
+    "minimum_mass": ("fixed", 6),
+    "maximum_mass": ("fixed", 7),
 }
-results = {name: [] for name in modes}
-wins = {name: 0 for name in modes}
+scores = {name: [] for name in modes}
+positive = {name: 0 for name in modes}
 
 for seed in range(SEEDS):
-    instance = make_instance(seed + 4000, K, N, T, W)
-    opponents = random_opponents(seed + 8000, K)
-    for name, (mode, policy) in modes.items():
+    instance = make_instance(seed + 30000, K, N, T, W)
+    hidden_policy = seed % 10
+    for name, (mode, own_policy) in modes.items():
         result = run_game(
             instance,
-            opponents,
+            hidden_policy,
             own_mode=mode,
-            own_policy=policy,
-            scenario_count=6,
+            own_policy=own_policy,
         )
-        results[name].append(result.score)
-        wins[name] += result.score > 0
+        scores[name].append(result.score)
+        positive[name] += result.score > 0
 
 for name in modes:
-    print(f"{name:22s} avg_score={mean(results[name]):8.2f} positive={wins[name]:2d}/{SEEDS}")
+    print(
+        f"{name:22s} "
+        f"avg_score={mean(scores[name]):8.2f} "
+        f"positive={positive[name]:2d}/{SEEDS}"
+    )
