@@ -477,3 +477,10 @@ CELL 11B.11 completed successfully. The exact p00384 checkpoint was packaged and
 The packaged file hash exactly matches the checkpoint manifest from CELL 11B.10. The package is ready for the user's manual submission workflow. The binary artifact remains in the user's local working directory; this documentation update does not upload the binary to GitHub.
 
 **CELL 11B.11 COMPLETED — QC PASS.** The only remaining external verification is the official contest/platform result. Local validation and package checks must not be described as an official score.
+
+
+## Official platform score — user-reported result
+
+Пользователь сообщил, что после отправки `submission_p00384/weights.pt` официальная платформа показала **6.53 балла**, против предыдущего результата **1.70 балла**. Разница: **+4.83 балла**. Этот результат зафиксирован со слов пользователя; скриншот/идентификатор посылки в репозитории не приложен, поэтому независимая проверка платформенного результата не выполнялась.
+
+The local CELL 11B.10 metrics remain separate from the official platform score. Do not infer a direct conversion between local reward/landing metrics and contest points.
