@@ -29,6 +29,7 @@ CELL 11B.10 сравнила v3b, p00192 и p00384 на одинаковых 240
 - `cell11b9_wind_gain_screen.py` — development screening силы wind-gain.
 - `cell11b10_final_validation.py` — независимая парная проверка на шести семействах.
 - `cell11b11_package_final.py` — упаковка p00384 в отдельную папку как `weights.pt`, проверка SHA-256, штатной загрузки, схемы тензоров и inference smoke test.
+- `cell11b12_micro_refinement.py` — короткий development-screen двух соседних коэффициентов (0.03456 и 0.04224) против неизменяемого p00384: 48 crosswind + 24 approach matched episodes на модель. Не является финальной валидацией и не продвигает кандидата автоматически.
 - `EXPERIMENTS.md` — полный журнал методики, экспериментов и результатов.
 - `make_weights.py` — исторический скрипт исходного кандидата; он не воспроизводит p00384.
 
