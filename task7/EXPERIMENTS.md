@@ -194,3 +194,30 @@ Protocol: compare baseline v3b and four candidates on the same 48 crosswind-only
 ### CELL 11B.2 — implementation correction
 
 Первый запуск остановился до генерации кандидатов с `RuntimeError: a view of a leaf Variable that requires grad is being used in an in-place operation` при обнулении строки весов вспомогательного нейрона. Это ошибка режима autograd во время структурной модификации параметров, а не ошибка архитектуры или данных. В `_make_wind_candidate()` все in-place изменения весов и bias обёрнуты в `torch.no_grad()`. Исправление сохранено в GitHub (commit `4b50e47`). Повторный запуск CELL 11B.2 ещё не выполнен; никаких результатов screening пока нет.
+
+
+## CELL 11B.2 — signed-wind horizontal-channel screening results
+
+Пользовательский запуск на development seed 93517, 48 crosswind episodes per model, medium, horizon 800. QC PASS. Baseline v3b: R=-2464.952, landed=0/48, hull=14, timeout=0, mean absolute final pad offset=11.971, median=11.164, mean closest offset below height 5=9.898.
+
+Candidates:
+- alpha -0.0192: R=-3022.749, landed=0, hull=16, timeout=0, mean abs final offset=17.691.
+- alpha -0.0096: R=-2761.579, landed=0, hull=17, timeout=1, mean abs final offset=15.004.
+- alpha +0.0096: R=-1995.822, landed=0, hull=13, timeout=1, mean abs final offset=7.209.
+- alpha +0.0192: R=-1431.959, landed=1, hull=5, timeout=1, mean abs final offset=5.005, median=4.835, mean closest offset below height 5=3.665.
+
+Paired against v3b:
+- alpha -0.0192: 7 wins / 41 losses, mean delta=-11.6208, bootstrap 95% CI [-15.3330,-7.9678], hull delta +2.
+- alpha -0.0096: 13/35, mean delta=-6.1797, CI [-11.0325,-1.3673], hull delta +3.
+- alpha +0.0096: 38/10, mean delta=+9.7736, CI [6.2197,13.4929], hull delta -1.
+- alpha +0.0192: 44/4, mean delta=+21.5207, CI [13.4936,34.1320], landing delta +1, hull delta -9.
+
+Best preliminary candidate is `v3b_wind_p00192` (alpha +0.0192). Compared with v3b, its total reward is +1032.993 higher (41.9% reduction in the magnitude of the negative reward), hull contacts fall from 14 to 5 (-64.3%), mean final absolute pad offset falls from 11.971 to 5.005 (-58.2%), and it lands 1/48 rather than 0/48. It also has one timeout vs zero for v3b. Strong development-screen signal only: a single 48-episode crosswind seed is not sufficient for promotion or final claims. The 95% paired bootstrap interval is conditional on this screening sample and does not correct for candidate selection.
+
+The printed `invalid_landings=0` is only one terminal-status column; CELL 11B.2 did not print OUT_OF_BOUNDS/OTHER counts. Do not infer that every non-landed episode was a hull contact or that all terminal statuses are explained. CELL 11B.3 adds a complete terminal-status breakdown.
+
+## CELL 11B.3 — full paired validation prepared
+
+Compare incumbent `weights_v3b.pt` with preliminary winner `weights_v3b_wind_p00192.pt` on a fresh balanced 240-episode batch (40 per family), medium, horizon 800, seed 94627. This seed is distinct from CELL 11A.4 (62814), CELL 11B.1R (73129), and CELL 11B.2 (93517). No tuning occurs in this stage.
+
+Script: `task7/cell11b3_full_validation.py`. Outputs flights, overall summary, family summary, paired results, stratified family-weighted bootstrap CI, total-reward paired bootstrap CI, and terminal status counts (LANDED, HULL_CONTACT, TIMEOUT, INVALID_LANDING, OUT_OF_BOUNDS, OTHER). Original v3b/v2c weights are not overwritten. Candidate is not promoted until aggregate evidence and family-level regressions are reviewed.
