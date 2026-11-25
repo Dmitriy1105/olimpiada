@@ -49,3 +49,19 @@ v2 не улучшила результат. При аудите кода обн
 - точное воспроизведение десяти историй.
 
 GitHub Actions, Python 3.11: **SUCCESS** — run [45657539518](https://github.com/Dmitriy1105/olimpiada/actions/runs/45657539518). Оба шага прошли: unit/interactive protocol tests и exact history validation.
+
+
+## 6. Official platform result (user-reported)
+
+The user submitted v3 and reported an official score of **6.122**.
+
+Previously reported platform results:
+- v1: **6.24** (reported to two decimal places).
+- v2: **6.236**.
+- v3: **6.122**.
+
+Therefore v3 is rejected as a candidate for further submissions. Keep v1/v2 as the best known baseline; do not overwrite them.
+
+The local replay gain reported in section 3 (+0.38% on the sum of (R/T)) did not transfer to the official score. This is consistent with the benchmark's known limitations: it covers only the 10 open easy maps, replays fixed historical opponent requests without running adaptive opponents, and clips requests when the historical action exceeds the changed budget. The package statement describes a 60-map evaluation including 50 hidden hard maps and opponents with 2–4 players. Thus the replay result was not a reliable predictor of official performance.
+
+**Decision:** no more coefficient-only changes based on the current replay. The next experiment must improve evaluation coverage and test one policy change at a time. A candidate is accepted only after the user reports a better official score.
