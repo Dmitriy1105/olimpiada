@@ -106,6 +106,15 @@ class MarsAgent:
         self.turn = 0
         self.expansion_weight = expansion_weight
 
+        # Per-opponent online behaviour model. A Beta(1, 3) prior gives a
+        # conservative 0.25 initial estimate of contest-oriented placements.
+        self.opponent_stats = [
+            None
+        ] + [
+            {"placed": 0, "shared": 0, "spend_ema": 0.5}
+            for _ in range(self.players - 1)
+        ]
+
         # Static shortest-path distances are useful for estimating which side
         # of the map is naturally safer for each player.
         self.static_distances = [
@@ -197,6 +206,78 @@ class MarsAgent:
             0, self.a - self.b * (own_count + enemy_count)
         )
 
+    def _expected_income(
+        self, own_count: int, enemy_count: int, probabilities: List[float]
+    ) -> float:
+        """Expected income over independent per-opponent contest events.
+
+        There are at most three opponents, so enumerating all 2**m outcomes
+        is cheap and handles 2-, 3- and 4-player games exactly under the
+        Bernoulli approximation.
+        """
+        expected = 0.0
+        outcomes = [(enemy_count, 1.0)]
+        for probability in probabilities:
+            next_outcomes = []
+            for count, weight in outcomes:
+                if probability < 1.0:
+                    next_outcomes.append((count, weight * (1.0 - probability)))
+                if probability > 0.0:
+                    next_outcomes.append((count + 1, weight * probability))
+            outcomes = next_outcomes
+        for total_enemy, weight in outcomes:
+            expected += weight * self._income(own_count, total_enemy)
+        return expected
+
+    def _contest_probabilities(
+        self,
+        cell: Cell,
+        enemy_distances: List[Dict[Cell, int]],
+        enemy_available: List[Set[Cell]],
+    ) -> List[float]:
+        """Estimate each opponent's chance of adding at least one robot.
+
+        The estimate combines reachability, relative station distance, current
+        access, and behaviour learned from the opponent's previous requests.
+        """
+        probabilities = []
+        own_static = self.static_distances[0].get(cell, 10**6)
+
+        for offset, player in enumerate(range(1, self.players)):
+            distance = enemy_distances[offset].get(cell, 10**6)
+            if distance >= 10**6:
+                probabilities.append(0.0)
+                continue
+
+            probability = 0.70 * math.exp(
+                -0.30 * max(0, distance - 1)
+            )
+
+            enemy_static = self.static_distances[player].get(cell, 10**6)
+            if own_static < 10**6 and enemy_static < 10**6:
+                # Positive margin means this opponent is closer to the cell.
+                margin = own_static - enemy_static
+                probability *= math.exp(
+                    self._clamp(0.14 * margin, -1.0, 1.0)
+                )
+
+            if cell in enemy_available[offset]:
+                probability = max(probability, 0.50)
+
+            stats = self.opponent_stats[player]
+            contest_rate = (
+                (stats["shared"] + 1.0) / (stats["placed"] + 4.0)
+            )
+            spend_factor = 0.75 + 0.50 * stats["spend_ema"]
+            contest_factor = 0.75 + contest_rate
+            budget = self.resources[player] // self.scale
+            budget_factor = 0.85 + 0.15 * min(1.0, budget / 3.0)
+
+            probability *= spend_factor * contest_factor * budget_factor
+            probabilities.append(self._clamp(probability, 0.0, 0.88))
+
+        return probabilities
+
     def _contest_probability(
         self,
         cell: Cell,
@@ -237,16 +318,14 @@ class MarsAgent:
             self.available_cells(player)
             for player in range(1, self.players)
         ]
-        # Dynamic distances reflect the actual frontiers, not just stations.
         enemy_distances = [
             self._distance_from_network(player)
             for player in range(1, self.players)
         ]
 
-        def contest_probability(cell: Cell) -> float:
-            count = sum(cell in cells for cells in enemy_available)
-            return self._contest_probability(
-                cell, enemy_distances, count
+        def contest_probabilities(cell: Cell) -> List[float]:
+            return self._contest_probabilities(
+                cell, enemy_distances, enemy_available
             )
 
         # A newly occupied frontier cell opens its currently inaccessible
@@ -275,16 +354,9 @@ class MarsAgent:
                     self.robots[p].get(nxt, 0)
                     for p in range(1, self.players)
                 )
-                probability = contest_probability(nxt)
-                first_income = max(
-                    0, self.a - self.b * (1 + enemy_count)
-                )
-                contested_income = max(
-                    0, self.a - self.b * (2 + enemy_count)
-                )
-                expected_income = (
-                    (1.0 - probability) * first_income
-                    + probability * contested_income
+                probabilities = contest_probabilities(nxt)
+                expected_income = self._expected_income(
+                    1, enemy_count, probabilities
                 )
 
                 future_profit = max(
@@ -302,34 +374,29 @@ class MarsAgent:
                 future_profit /= max(1, coverage[nxt])
                 bonus += future_profit
 
-            # Small enough not to dominate direct production, but sufficient
-            # to prefer useful branches when current marginal yields are close.
             expansion_bonus[cell] = self.expansion_weight * bonus
 
         budget = self.resources[0] // self.scale
         if budget <= 0:
             return {}
 
-        # Heap entries hold the next robot's marginal value for each cell.
-        # All values are expressed in scaled resource units.
+        # Each heap entry represents the next marginal robot in one cell.
         heap = []
-        probabilities: Dict[Cell, float] = {}
+        probabilities_by_cell: Dict[Cell, List[float]] = {}
         for cell in available:
             own_count = self.robots[0].get(cell, 0)
             enemy_count = sum(
                 self.robots[p].get(cell, 0)
                 for p in range(1, self.players)
             )
-            probability = contest_probability(cell)
-            probabilities[cell] = probability
+            probabilities = contest_probabilities(cell)
+            probabilities_by_cell[cell] = probabilities
 
-            current = (
-                (1.0 - probability) * self._income(own_count, enemy_count)
-                + probability * self._income(own_count, enemy_count + 1)
+            current = self._expected_income(
+                own_count, enemy_count, probabilities
             )
-            after_one = (
-                (1.0 - probability) * self._income(own_count + 1, enemy_count)
-                + probability * self._income(own_count + 1, enemy_count + 1)
+            after_one = self._expected_income(
+                own_count + 1, enemy_count, probabilities
             )
             marginal = after_one - current
 
@@ -358,19 +425,17 @@ class MarsAgent:
                 self.robots[p].get(cell, 0)
                 for p in range(1, self.players)
             )
-            probability = probabilities[cell]
+            probabilities = probabilities_by_cell[cell]
 
-            current = (
-                (1.0 - probability) * self._income(own_count, enemy_count)
-                + probability * self._income(own_count, enemy_count + 1)
+            current = self._expected_income(
+                own_count, enemy_count, probabilities
             )
-            after_one = (
-                (1.0 - probability) * self._income(own_count + 1, enemy_count)
-                + probability * self._income(own_count + 1, enemy_count + 1)
+            after_one = self._expected_income(
+                own_count + 1, enemy_count, probabilities
             )
             marginal = after_one - current
 
-            # The frontier bonus is paid only for the first robot in a cell.
+            # The expansion bonus is paid only for the first robot in a cell.
             score = remaining_turns * marginal - self.scale
             heapq.heappush(
                 heap, (-score, negative_tie, cell)
@@ -398,6 +463,28 @@ class MarsAgent:
             self.available_cells(player)
             for player in range(self.players)
         ]
+
+        # Learn from the opponent's actual previous actions before updating
+        # the robot map. Shared placements are those in our current frontier.
+        own_frontier = available[0]
+        for player in range(1, self.players):
+            request = requests[player]
+            placed = sum(
+                count for cell, count in request.items()
+                if cell in available[player]
+            )
+            shared = sum(
+                count for cell, count in request.items()
+                if cell in available[player] and cell in own_frontier
+            )
+            stats = self.opponent_stats[player]
+            stats["placed"] += placed
+            stats["shared"] += shared
+            old_budget = max(1, self.resources[player] // self.scale)
+            spend_fraction = min(1.0, placed / old_budget)
+            stats["spend_ema"] = (
+                0.75 * stats["spend_ema"] + 0.25 * spend_fraction
+            )
 
         for player, request in enumerate(requests):
             for cell, count in request.items():
