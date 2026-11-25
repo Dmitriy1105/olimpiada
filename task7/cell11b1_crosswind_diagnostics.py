@@ -85,15 +85,27 @@ def _evaluate_with_trace(name, model_path, n_episodes, seed, horizon):
     timeout = _as_cpu_tensor(env.truncated).numpy().astype(int)
     hull = _as_cpu_tensor(env.hull_contact).numpy().astype(int)
     steps = _as_cpu_tensor(env.steps).numpy().astype(int)
-    final_x = _as_cpu_tensor(env.x).numpy().astype(float)
-    final_y = _as_cpu_tensor(env.y).numpy().astype(float)
+    # The participant-v2 Lander exposes physical state as env.state, not
+    # separate env.x/env.y attributes. state columns are x, nominal height,
+    # vx, vy, theta, omega; settle_time/terminated are documented dynamic fields.
+    final_state = _as_cpu_tensor(env.state).numpy().astype(float)
+    final_x = final_state[:, 0]
+    final_y = final_state[:, 1]
     final_settle = _as_cpu_tensor(env.settle_time).numpy().astype(float)
+    terminated = _as_cpu_tensor(env.terminated).numpy().astype(bool)
 
-    # Match CELL 09 terminal classification exactly:
-    # LANDED > HULL_CONTACT > TIMEOUT > OUT_OF_BOUNDS > INVALID_LANDING > OTHER.
+    assert final_state.shape == (n_episodes, 6)
+    assert final_settle.shape == (n_episodes,)
+    assert terminated.shape == (n_episodes,)
+
+    # Reconstruct terminal reason from the participant-v2 public state flags
+    # and the exact termination conditions in torch_lander/env.py:
+    # settled but not landed -> INVALID_LANDING; boundary crossing -> OUT_OF_BOUNDS.
+    settled = final_settle >= 0.5 - 1e-10
+    out_of_bounds = (np.abs(final_x) >= 40.0 - 1e-7) | (final_y >= 60.0 - 1e-7)
     status = np.full(n_episodes, "OTHER", dtype=object)
-    status[final_settle >= 0.5 - 1e-10] = "INVALID_LANDING"
-    status[(np.abs(final_x) >= 39.999) | (final_y >= 59.999)] = "OUT_OF_BOUNDS"
+    status[terminated & settled & (landed == 0) & (hull == 0)] = "INVALID_LANDING"
+    status[terminated & out_of_bounds & (landed == 0) & (hull == 0)] = "OUT_OF_BOUNDS"
     status[timeout == 1] = "TIMEOUT"
     status[hull == 1] = "HULL_CONTACT"
     status[landed == 1] = "LANDED"
