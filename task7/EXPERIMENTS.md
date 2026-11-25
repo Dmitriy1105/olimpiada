@@ -342,3 +342,27 @@ self.terminated |= settled
 ## CELL 11B.8 — exact landing predicate replay prepared
 
 Script: `task7/cell11b8_exact_landing_predicates.py`. Replays the same 40 crosswind episodes/model and seed 271828 used in CELL 11B.4, without tuning. At terminal state it recomputes the three exact `on_pad` predicates using the same `vertices_world`, `pad_center`, `pad_half_width`, `feet`, and `theta` expressions from `Lander._step`. It reports per-episode failure signatures (inside / feet / angle / combinations), geometry margins, and verifies that the recomputed `on_pad` agrees with `env.landed` for settled episodes. This is deterministic diagnostic reproduction, not independent validation. It does not modify model weights. Output CSVs: `cell11b8_exact_landing_predicates.csv` and `cell11b8_predicate_summary.csv`.
+
+
+## CELL 11B.8 — exact landing predicate results (seed 271828)
+
+Пользовательский запуск повторил 40 paired crosswind scenarios для каждой модели: v3b и v3b_wind_p00192. QC PASS; replay matched the exact `env.landed` flag for settled episodes. This is diagnostic reproduction, not independent validation.
+
+| Model | Invalid | Failed inside | Failed feet | Failed angle |
+|---|---:|---:|---:|---:|
+| v3b | 30 | 30 | 30 | 21 |
+| v3b_wind_p00192 | 31 | 31 | 30 | 24 |
+
+Failure signatures:
+- v3b: 21 `inside+feet+angle`; 9 `inside+feet`.
+- v3b_wind_p00192: 24 `inside+feet+angle`; 6 `inside+feet`; 1 `inside`.
+
+No invalid episode in this sample passes the `inside` predicate. Thus horizontal/leg-footprint alignment with the pad is the universal failed condition in these invalid crosswind landings. The angle threshold is a secondary failure (21/30 and 24/31), not the sole cause. Feet height also fails in almost all invalid episodes; this is likely coupled to the off-pad contact geometry and must not be treated as independent from `inside`.
+
+Mean absolute final centre offset among invalid episodes: v3b 11.1416; wind candidate 4.5436. Mean absolute foot minimum y: 4.2109 vs 1.4644. The wind candidate improves approach geometry substantially but does not yet reach the pad footprint. The result does not justify changing simulator landing thresholds.
+
+## CELL 11B.9 — targeted stronger wind-gain screen prepared
+
+Script: `task7/cell11b9_wind_gain_screen.py`. Since CELL 11B.8 found `inside` failure in every invalid crosswind landing, the next experiment changes only the signed-wind feed-forward amplitude, retaining the existing v3b vertical gate and verified horizontal output channel. Compare unchanged v3b, current candidate `v3b_wind_p00192`, and four stronger positive amplitudes alpha=0.0240, 0.0288, 0.0384, 0.0480 on the same fresh 48-episode crosswind sample (seed 51739, medium, horizon 800).
+
+The script recomputes the exact three landing predicates for every terminal state and verifies the recomputed `on_pad` agrees with `env.landed` for settled episodes. It reports paired reward deltas against p00192, landing/hull/invalid counts, final pad offset, and predicate failures. Candidate weights are written under new names; existing v2c, v3b and p00192 checkpoints are not overwritten. This remains a development screen; any selected candidate requires a fresh balanced six-family validation before promotion.
