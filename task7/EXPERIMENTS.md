@@ -484,3 +484,43 @@ The packaged file hash exactly matches the checkpoint manifest from CELL 11B.10.
 Пользователь сообщил, что после отправки `submission_p00384/weights.pt` официальная платформа показала **6.53 балла**, против предыдущего результата **1.70 балла**. Разница: **+4.83 балла**. Этот результат зафиксирован со слов пользователя; скриншот/идентификатор посылки в репозитории не приложен, поэтому независимая проверка платформенного результата не выполнялась.
 
 The local CELL 11B.10 metrics remain separate from the official platform score. Do not infer a direct conversion between local reward/landing metrics and contest points.
+
+
+## CELL 11B.12 — bounded micro-refinement completed
+
+Пользовательский запуск CELL 11B.12 завершился с **QC PASS**. Выполнен короткий development-screen двух коэффициентов вокруг p00384 с неизменяемым p00384 в качестве парного reference.
+
+### Дизайн эксперимента
+
+- Crosswind: 48 одинаковых начальных сценариев на каждую модель.
+- Approach: 24 одинаковых начальных сценария на каждую модель.
+- Модели: p00384 (alpha=0.03840), p003456 (alpha=0.03456), p004224 (alpha=0.04224).
+- Горизонт: 800.
+- Пересчитаны точные геометрические landing predicates; они совпали с `env.landed` для settled episodes.
+- SHA-256 p00384 и исходного v3b проверены до создания кандидатов.
+- Исходные веса и пакет submission_p00384 не перезаписывались.
+
+### Результаты
+
+| Family | Model | Episodes | Return sum | Landed | Hull | Invalid |
+|---|---|---:|---:|---:|---:|---:|
+| crosswind | p00384 | 48 | 3368.450 | 24 | 6 | 18 |
+| crosswind | p003456 | 48 | 3218.753 | 23 | 5 | 20 |
+| crosswind | p004224 | 48 | 775.688 | 12 | 9 | 27 |
+| approach | p00384 | 24 | 2719.092 | 19 | 0 | 5 |
+| approach | p003456 | 24 | 2719.092 | 19 | 0 | 5 |
+| approach | p004224 | 24 | 2719.092 | 19 | 0 | 5 |
+
+### Paired comparison against p00384
+
+- **p003456 / crosswind:** mean paired reward delta = -3.1187; 95% bootstrap CI [-42.7834, 35.8317]; landing delta = -1; hull delta = -1; invalid-landing delta = +2. The interval includes zero, so this screen does not establish an improvement.
+- **p004224 / crosswind:** mean paired reward delta = -54.0159; 95% bootstrap CI [-88.4476, -19.3881]; landing delta = -12; hull delta = +3; invalid-landing delta = +9. This candidate is materially worse on the tested scenarios.
+- **Approach:** both candidates exactly match p00384 on all 24 episodes; no gain and no observed regression in this family.
+
+### Decision
+
+**Retain p00384 (alpha=0.03840) as the champion. Do not promote p003456 or p004224. Stop local coefficient refinement.** p003456 is not a statistically supported improvement and has one fewer landing in the crosswind screen; p004224 is clearly worse in the paired screen.
+
+This is a small development screen (48 crosswind + 24 approach episodes), not an independent final holdout. It is sufficient for the bounded decision not to replace p00384, but it does not establish generalization beyond the tested scenarios. The user-reported official platform score of 6.53 remains associated with the p00384 package; local reward values must not be converted into platform points.
+
+**CELL 11B.12 COMPLETED — QC PASS. p00384 RETAINED.**
