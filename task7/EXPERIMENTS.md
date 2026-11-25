@@ -457,4 +457,23 @@ The p00384 candidate reduces the number of invalid crosswind landings and almost
 
 Promote v3b_wind_p00384 (alpha=0.0384) as the current locally validated champion for Task 7. The independent balanced six-family validation supports the improvement over v3b: +17 landings, +4366.729 reward, and positive paired bootstrap intervals. Retain v3b and p00192 as immutable comparison checkpoints. The result is a local simulator validation, not an official contest score or a guarantee on hidden tests.
 
-Next: CELL 11B.11 packages the exact SHA-256-verified p00384 checkpoint as a separate weights.pt artifact, re-loads it with the participant loader, checks tensor schema and runs inference-only smoke test. No source checkpoint or pre-existing submission file is overwritten.
+CELL 11B.11 completed successfully. The exact p00384 checkpoint was packaged and reloaded; see the completion record below. No source checkpoint or pre-existing submission file was overwritten.
+
+
+## CELL 11B.11 — final package validation completed
+
+Пользовательский запуск CELL 11B.11 завершился с QC PASS.
+
+- Source checkpoint: `models/weights_v3b_wind_p00384.pt`
+- Packaged artifact: `submission_p00384/weights.pt`
+- SHA-256: `ef5a6b8d9b2ba95712a3b0dc02551dd8ad4aec8cdd43d1cb4bcd865d17195c23`
+- State dict: PASS — six tensors, expected shapes, float32, all finite.
+- Participant loader: PASS.
+- Inference smoke test: PASS — input (4, 42), output (4, 9).
+- Simulator steps during packaging: 0.
+- Manifest and README generated in the separate submission folder.
+- Original checkpoints were not modified.
+
+The packaged file hash exactly matches the checkpoint manifest from CELL 11B.10. The package is ready for the user's manual submission workflow. The binary artifact remains in the user's local working directory; this documentation update does not upload the binary to GitHub.
+
+**CELL 11B.11 COMPLETED — QC PASS.** The only remaining external verification is the official contest/platform result. Local validation and package checks must not be described as an official score.
