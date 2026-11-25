@@ -189,3 +189,8 @@ Hypothesis: v3b's adaptive gate changes the vertical/thrust channel; the crosswi
 Script: task7/cell11b2_horizontal_wind_screen.py. It identifies the existing v3b vertical gate, selects a low-influence auxiliary first-layer neuron, and routes normalized signed wind observation feature 12 into the verified turn-channel neuron 1. Four signed amplitudes are screened: −0.0192, −0.0096, +0.0096, +0.0192; gate sharpness=2.0. Positive and negative directions are both tested rather than assumed.
 
 Protocol: compare baseline v3b and four candidates on the same 48 crosswind-only medium episodes, seed 93517, horizon 800. Save candidate weights separately and export episode, trajectory, action, paired-screen, and candidate-manifest CSVs. This is a small development screen only; no candidate is promoted from this result alone. Any promising candidate must next be checked on a fresh balanced 240-episode run across all six families, with paired and stratified-bootstrap analysis. Original v2c and v3b weights are not overwritten.
+
+
+### CELL 11B.2 — implementation correction
+
+Первый запуск остановился до генерации кандидатов с `RuntimeError: a view of a leaf Variable that requires grad is being used in an in-place operation` при обнулении строки весов вспомогательного нейрона. Это ошибка режима autograd во время структурной модификации параметров, а не ошибка архитектуры или данных. В `_make_wind_candidate()` все in-place изменения весов и bias обёрнуты в `torch.no_grad()`. Исправление сохранено в GitHub (commit `4b50e47`). Повторный запуск CELL 11B.2 ещё не выполнен; никаких результатов screening пока нет.
