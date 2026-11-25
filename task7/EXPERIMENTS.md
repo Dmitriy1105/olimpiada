@@ -284,3 +284,34 @@ Interpretation: on this fresh 40-episode crosswind diagnostic set, the wind cand
 Script: `task7/cell11b5_failure_decomposition.py`. This is a post-processing step using the CSVs already written by CELL 11B.4; it does not rerun the simulator. It pairs identical (family, episode_id) cases and reports terminal-status transitions (e.g. HULL_CONTACT→INVALID_LANDING), reward deltas by transition, terminal-state metrics grouped by status, closest recorded near-surface approach (height <=8) with the action/velocity/attitude at that sample, and throttle distribution by family/model.
 
 Run only after CELL 11B.4 outputs are present in REPORTS_DIR. The script writes five CSV reports and does not alter checkpoints. It is diagnostic, not a model-tuning or promotion stage.
+
+
+## CELL 11B.5 — paired failure decomposition results (seed 271828)
+
+Постобработка CELL 11B.4, 80 matched episodes (40 crosswind + 40 low_thrust), QC PASS. No simulator rerun and no weights modified.
+
+Crosswind paired status transitions, candidate minus v3b:
+- INVALID_LANDING → INVALID_LANDING: 24 episodes, mean reward delta +12.7008, sum +304.8198.
+- HULL_CONTACT → INVALID_LANDING: 7 episodes, mean +28.9030, sum +202.3212.
+- INVALID_LANDING → HULL_CONTACT: 5 episodes, mean +14.3315, sum +71.6575.
+- HULL_CONTACT → HULL_CONTACT: 3 episodes, mean +14.2737, sum +42.8212.
+- INVALID_LANDING → LANDED: 1 episode, delta +216.7852.
+
+Crosswind terminal metrics by status:
+- v3b INVALID_LANDING (30): mean abs pad offset 11.1416; mean abs vx 0.0247; vy 0.0132; mean abs angle 21.6696°; omega 0.0096; settle_time 0.5.
+- candidate INVALID_LANDING (31): mean abs pad offset 4.5436; mean abs vx 0.0254; vy 0.0090; mean abs angle 23.5228°; omega 0.0136; settle_time 0.5.
+- v3b HULL_CONTACT (10): mean abs offset 14.8788; mean abs vx 2.2516; vy 1.8969; abs angle 50.7786°.
+- candidate HULL_CONTACT (8): mean abs offset 6.2290; mean abs vx 1.2660; vy 1.6697; abs angle 65.8007°.
+- candidate LANDED (1): abs offset 0.7435; abs vx 0.0553; abs vy 0.0067; abs angle 0.1322°.
+
+Low-thrust paired transitions: 30 LANDED→LANDED, 7 INVALID_LANDING→INVALID_LANDING, 2 HULL_CONTACT→HULL_CONTACT, and 1 INVALID_LANDING→LANDED. The candidate has one additional landing on this small diagnostic seed; aggregate low-thrust behaviour is nearly unchanged.
+
+Closest sampled approach below height 8 (only episodes with a qualifying recorded trace sample): crosswind v3b 36 episodes, mean abs offset 8.4011, mean abs vx 2.1330; candidate 40 episodes, mean abs offset 3.1201, mean abs vx 1.0768. This is a sampled trace minimum, not a continuous-time minimum.
+
+Interpretation: the candidate's main gain is horizontal alignment, but many stable invalid landings remain outside the landing acceptance region. The invalid-landing candidate group still has mean abs offset 4.54 and mean abs angle 23.52°. This strongly suggests position and/or attitude geometry remain relevant; the output alone does not identify which exact predicate failed. The source acceptance rule must be inspected before changing parameters. Do not assume that the angle is the sole cause. Candidate is not promoted; v3b remains incumbent.
+
+## CELL 11B.6 — source-verified landing rule audit prepared
+
+Script: `task7/cell11b6_landing_rule_audit.py`. This is a fast audit that reads the installed `torch_lander` source via Python introspection, prints the complete relevant Lander methods and source windows containing landing/pad/leg/settling checks, verifies live environment tensor shapes without advancing an episode, and profiles crosswind INVALID_LANDING terminal states from CELL 11B.4 CSVs. It writes `cell11b6_landing_rule_source.txt` and `cell11b6_invalid_landing_profile.csv`.
+
+Run in the existing participant package environment after CELL 11B.4. No simulator batch is run, no weights are modified, and no landing threshold is guessed. Review the printed exact source rule before any correction. This audit is intended to prevent tuning the wrong predicate and to keep the remaining schedule short: one targeted correction/screen only if source confirms a plausible adjustable mechanism, followed by one independent final validation and packaging.
