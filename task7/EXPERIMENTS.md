@@ -315,3 +315,30 @@ Interpretation: the candidate's main gain is horizontal alignment, but many stab
 Script: `task7/cell11b6_landing_rule_audit.py`. This is a fast audit that reads the installed `torch_lander` source via Python introspection, prints the complete relevant Lander methods and source windows containing landing/pad/leg/settling checks, verifies live environment tensor shapes without advancing an episode, and profiles crosswind INVALID_LANDING terminal states from CELL 11B.4 CSVs. It writes `cell11b6_landing_rule_source.txt` and `cell11b6_invalid_landing_profile.csv`.
 
 Run in the existing participant package environment after CELL 11B.4. No simulator batch is run, no weights are modified, and no landing threshold is guessed. Review the printed exact source rule before any correction. This audit is intended to prevent tuning the wrong predicate and to keep the remaining schedule short: one targeted correction/screen only if source confirms a plausible adjustable mechanism, followed by one independent final validation and packaging.
+
+
+## CELL 11B.7 — exact landing rule source inspection
+
+Пользовательский запуск вывел полный `Lander._result` и `Lander._step` из установленного `torch_lander/env.py`. Источник подтверждает:
+
+1. Устойчивость: обе ноги имеют контакт (`touching.all(1))); обе опоры получают импульс поддержки (`support.all(1))); максимальная скорость контрольных точек корпуса <0.3; максимальная угловая скорость <0.5; аппарат ещё не завершил эпизод.
+2. `settle_time` увеличивается только пока `stable` истинно и сбрасывается при потере устойчивости.
+3. После `SETTLE_SECONDS` выставляется `settled`; эпизод завершается независимо от `on_pad`.
+4. Посадка засчитывается только если одновременно:
+   - все 8 вершин ног по X находятся в пределах `pad_center ± pad_half_width`;
+   - минимальная Y-координата каждой ноги имеет абсолютное значение <0.03;
+   - `abs(theta) <= 0.25 rad` (≈14.32°).
+
+Ключевой фрагмент:
+```python
+on_pad = inside & (feet.abs() < .03).all(1) & (self.state[:, 4].abs() <= .25)
+settled = active & (self.settle_time >= SETTLE_SECONDS-1e-10)
+self.landed |= settled & on_pad
+self.terminated |= settled
+```
+
+Следствие: `INVALID_LANDING` после settle означает, что устойчивость выдержана, но хотя бы один из трёх предикатов `inside`, `feet`, `angle` ложен в момент завершения. Агрегатные метрики CELL 11B.5 не показывают, какой именно предикат нарушен в каждом эпизоде. Угол кандидата (mean 23.52°, median 28.50°) превышает лимит 14.32° в среднем, но нельзя считать угол единственной причиной без поблочного измерения.
+
+## CELL 11B.8 — exact landing predicate replay prepared
+
+Script: `task7/cell11b8_exact_landing_predicates.py`. Replays the same 40 crosswind episodes/model and seed 271828 used in CELL 11B.4, without tuning. At terminal state it recomputes the three exact `on_pad` predicates using the same `vertices_world`, `pad_center`, `pad_half_width`, `feet`, and `theta` expressions from `Lander._step`. It reports per-episode failure signatures (inside / feet / angle / combinations), geometry margins, and verifies that the recomputed `on_pad` agrees with `env.landed` for settled episodes. This is deterministic diagnostic reproduction, not independent validation. It does not modify model weights. Output CSVs: `cell11b8_exact_landing_predicates.csv` and `cell11b8_predicate_summary.csv`.
