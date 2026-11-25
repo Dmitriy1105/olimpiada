@@ -156,6 +156,13 @@ def _evaluate_one(name, model_path, seed, n_episodes, horizon, trace_every):
     steps = env.steps.detach().cpu().numpy().astype(int)
     rewards_np = rewards.detach().cpu().numpy().astype(float)
 
+    # Include the exact terminal state in the closest-approach metrics.
+    for i in range(n_episodes):
+        final_dx = float(final_state[i, 0] - params[i, 6])
+        min_abs_dx[i] = min(min_abs_dx[i], abs(final_dx))
+        if final_state[i, 1] <= 5.0:
+            min_abs_dx_low[i] = min(min_abs_dx_low[i], abs(final_dx))
+
     rows = []
     for i in range(n_episodes):
         if landed[i]:
