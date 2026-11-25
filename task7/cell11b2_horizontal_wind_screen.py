@@ -95,6 +95,7 @@ def _evaluate_one(name, model_path, seed, n_episodes, horizon, trace_every):
     model = load(model_path).eval()
 
     action_counts = np.zeros(9, dtype=np.int64)
+    rewards = torch.zeros(n_episodes, dtype=torch.float64)
     min_abs_dx = np.full(n_episodes, np.inf, dtype=np.float64)
     min_abs_dx_low = np.full(n_episodes, np.inf, dtype=np.float64)
     trace_rows = []
@@ -141,7 +142,8 @@ def _evaluate_one(name, model_path, seed, n_episodes, horizon, trace_every):
                         "turn": int(action % 3 - 1),
                     })
 
-            env.step(actions)
+            _, reward, _, _, _ = env.step(actions)
+            rewards += reward.detach().cpu().double()
             step_index += 1
 
     final_state = env.state.detach().cpu().numpy().astype(float)
@@ -152,7 +154,7 @@ def _evaluate_one(name, model_path, seed, n_episodes, horizon, trace_every):
     terminated = env.terminated.detach().cpu().numpy().astype(bool)
     settle = env.settle_time.detach().cpu().numpy().astype(float)
     steps = env.steps.detach().cpu().numpy().astype(int)
-    rewards = env.score.detach().cpu().numpy().astype(float)
+    rewards_np = rewards.detach().cpu().numpy().astype(float)
 
     rows = []
     for i in range(n_episodes):
@@ -174,7 +176,7 @@ def _evaluate_one(name, model_path, seed, n_episodes, horizon, trace_every):
             "model": name,
             "episode_id": i,
             "family": "crosswind",
-            "return": float(rewards[i]),
+            "return": float(rewards_np[i]),
             "landed": int(landed[i]),
             "hull_contact": int(hull[i]),
             "timeout": int(timeout[i]),
