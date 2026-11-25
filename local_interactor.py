@@ -1,4 +1,4 @@
-"""Subprocess-level protocol test for solution.py (stdout/stderr separation, flush, turns)."""
+"""Subprocess-level interactive protocol test using one shared bot strategy."""
 from __future__ import annotations
 
 import random
@@ -13,7 +13,7 @@ def run_protocol(seed: int = 77, k: int = 10, n: int = 100, rounds: int = 20, ca
     rng = random.Random(seed)
     masses = [rng.randint(1, 50) for _ in range(n)]
     values = [rng.randint(1, 100) for _ in range(n)]
-    policy_ids = [rng.randrange(8) for _ in range(k - 1)]
+    hidden_policy = rng.randrange(10)
 
     process = subprocess.Popen(
         [sys.executable, str(Path(__file__).with_name("solution.py"))],
@@ -33,8 +33,8 @@ def run_protocol(seed: int = 77, k: int = 10, n: int = 100, rounds: int = 20, ca
     available = set(range(n))
     player_mass = [0] * k
     player_value = [0] * k
-    orders_agent = GreedyDwarvesAgent(k, n, rounds, capacity, masses, values, cpu_budget=100)
-    orders = orders_agent.orders
+    model = GreedyDwarvesAgent(k, n, rounds, capacity, masses, values, cpu_budget=100)
+    order = model.orders[hidden_policy]
     outputs = []
 
     for _ in range(rounds):
@@ -59,11 +59,14 @@ def run_protocol(seed: int = 77, k: int = 10, n: int = 100, rounds: int = 20, ca
 
         bot_actions = []
         for j in range(1, k):
-            legal = [i for i in available if player_mass[j] + masses[i] <= capacity]
+            legal = [
+                i for i in available
+                if player_mass[j] + masses[i] <= capacity
+            ]
             if not legal:
                 bot_actions.append(0)
                 continue
-            item = min(legal, key=lambda i: orders[policy_ids[j - 1]].index(i))
+            item = min(legal, key=lambda i: order.index(i))
             available.remove(item)
             player_mass[j] += masses[item]
             player_value[j] += values[item]
@@ -80,8 +83,10 @@ def run_protocol(seed: int = 77, k: int = 10, n: int = 100, rounds: int = 20, ca
         raise AssertionError(f"solver exited with code {return_code}; stderr={stderr}")
     if extra.strip():
         raise AssertionError(f"unexpected extra stdout after T actions: {extra!r}")
+
     return {
         "actions": outputs,
+        "hidden_policy": hidden_policy,
         "own_mass": player_mass[0],
         "own_value": player_value[0],
         "max_other_mass": max(player_mass[1:]),
